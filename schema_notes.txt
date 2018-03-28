@@ -1,0 +1,54 @@
+CSEP Data Modeling (Make GitHub repository)
+
+Query Ideas:
+  - given a forecast group name provide list of forecasts in the group
+  - given a forecast group name provide list of evaluations run on forecasts in the group
+  - given a forecast group name provide schedule of forecasts in the group
+  - given a forecast group name provide schedule of evaluations in the group
+
+Forecasts
+  - forecast_id <int> <required> <primary> <auto>
+  - model_id <int> <foreign>
+  - dispatcher_id <int> <foreign>
+  - schedule_id <int> <foreign>
+  - forecast_group_id <int> <foreign>
+  - name <string> <required> : [STEPCOULOMB2OneDay_9_4_2010.16_35_42]
+  - forecast_filename <string>
+
+Models
+  - model_id <int> <required> <primary> <auto>
+  - name
+  - executable
+  - language/environment
+
+Dispatchers
+  - dispatcher_id <int> <required> <primary> <auto>
+  - script_name <string>
+  - config_file_name <string>
+  - logfile <string>
+
+ForecastGroups
+  - forcastgroup_id <int> <required> <primary> <auto>
+  - forecast_group_name <string>
+  - config_file_name <string>
+
+Dispatchers_ForecastGroups
+  - dispatcher_forecastgroup_id <int> <required> <primary> <auto>
+  - dispatcher_id <int> <foreign_key>
+  - forecastgroup_id <int> <foreign_key>
+
+EvalulationTypes
+  - evaluation_type_id <int> <required> <primary> <auto>
+  - name <string>
+  - type <string> : simulation, rate-based, etc.
+
+Evalulations
+  - evaluation_id <int> <required> <primary> <auto>
+  - evaluation_types_id <int> <foreign>
+  - scheduled_event_id <int> <foreign>
+
+ScheduledEvents
+  - scheduledevent_id
+  - datetime : [year, month, day, hour, minute, second]
+  - event_type <string>
+  - status <string> : [Successful, Scheduled, Failed, ...]
