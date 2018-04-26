@@ -1,0 +1,5 @@
+ForecastGroups,OneDay_CMT,forecast_group1_config.xml
+ForecastGroups,OneMonth_ANSS,forecast_group2_config.xml
+ForecastGroups,OneDay_ANSS,forecast_group3_config.xml
+ForecastGroups,OneYear_CMT,forecast_group4_config.xml
+ForecastGroups,OneDay_ANSS_2,forecast_group5_config.xml

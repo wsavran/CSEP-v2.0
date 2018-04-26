@@ -1,0 +1,84 @@
+CREATE TABLE IF NOT EXISTS Models (
+    model_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    executable TEXT NOT NULL,
+    language TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ScheduledForecasts (
+    scheduled_forecast_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    datetime TEXT NOT NULL,
+    status TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ScheduledEvaluations (
+    scheduled_evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    datetime TEXT NOT NULL,
+    status TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS Dispatchers (
+    dispatcher_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    script_name TEXT NOT NULL,
+    config_file_name TEXT NOT NULL,
+    logfile TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ForecastGroups (
+    forecastgroup_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_name TEXT NOT NULL,
+    config_file_name TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS EvaluationTypes (
+    evaluation_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    evaluation_class TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS Catalogs (
+    catalog_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    data_filename TEXT NOT NULL,
+    creation_date TEXT NOT NULL,
+    post_processing TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS Forecasts (
+    forecast_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_id INTEGER NOT NULL,
+    dispatcher_id INTEGER NOT NULL,
+    schedule_id INTEGER NOT NULL,
+    group_id INTEGER NOT NULL,
+    catalog_id INTEGER,
+    name TEXT NOT NULL,
+    filepath TEXT,
+    time_period TEXT NOT NULL,
+    start_datetime TEXT NOT NULL,
+    end_datetime TEXT NOT NULL,
+    waiting_period TEXT NOT NULL,
+    FOREIGN KEY(model_id) REFERENCES Models,
+    FOREIGN KEY(dispatcher_id) REFERENCES Dispatchers,
+    FOREIGN KEY(schedule_id) REFERENCES ScheduledForecasts,
+    FOREIGN KEY(group_id) REFERENCES ForecastGroups,
+    FOREIGN KEY(catalog_id) REFERENCES Catalogs
+);
+
+CREATE TABLE IF NOT EXISTS Evaluations (
+    evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    compute_datetime TEXT,
+    scheduled_id INTEGER NOT NULL,
+    catalog_id INTEGER,
+    evaluation_type_id INTEGER,
+    forecast_id INTEGER,
+    filepath TEXT,
+    FOREIGN KEY(scheduled_id) REFERENCES ScheduledEvaluations,
+    FOREIGN KEY(catalog_id) REFERENCES Catalogs,
+    FOREIGN KEY(evaluation_type_id) REFERENCES EvaluationTypes,
+    FOREIGN KEY(forecast_id) REFERENCES Forecasts
+);
+
+CREATE TABLE IF NOT EXISTS Dispatchers_ForecastGroups (
+    dispatcher_id INTEGER NOT NULL,
+    group_id INTEGER NOT NULL,
+    PRIMARY KEY(dispatcher_id, group_id)
+);
