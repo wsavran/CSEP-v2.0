@@ -55,7 +55,8 @@ JOIN ScheduledEvaluations
     ON Evaluations.scheduled_id=ScheduledEvaluations.scheduled_evaluation_id
 WHERE strftime('%Y',Forecasts.start_datetime)='2018' AND ScheduledEvaluations.status='Completed';
 
-SELECT Forecasts.name, ForecastGroups.group_name, ScheduledEvaluations.status, Dispatchers.script_name, ScheduledEvaluations.datetime, EvaluationTypes.name
+SELECT Forecasts.name, ForecastGroups.group_name, ScheduledEvaluations.status, Dispatchers.script_name,
+       Dispatchers.command_line_args, ScheduledEvaluations.datetime, EvaluationTypes.name
 FROM Evaluations
 JOIN Forecasts
     ON Evaluations.forecast_id=Forecasts.forecast_id
