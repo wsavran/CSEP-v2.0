@@ -46,7 +46,7 @@ def _insert_from_csv(filename, cursor, table, fields):
     return True
 
 
-def load_data(db_path, tables, join_tables = []):
+def load_data(db_path, tables, join_tables=[]):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     for k, v in tables.items():

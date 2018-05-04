@@ -1,7 +1,13 @@
 import sqlite3
 
 
-def _query(cursor, query):
+def query(cursor, query):
+    """
+    performs query on database
+    :param cursor: cursor to sqlite3 database
+    :param query: sql statements to query
+    :return:
+    """
     out = []
     c = cursor.execute(query)
     out.append(c.fetchall())
@@ -29,7 +35,7 @@ if __name__ == "__main__":
     stmnts = _read_statements('./artifacts/sql_queries.txt')
     results = []
     for stmnt in stmnts:
-        results.append(_query(cur, stmnt))
+        results.append(query(cur, stmnt))
     # grab only the first query
     for result in results[7]:
         for tup in result:
