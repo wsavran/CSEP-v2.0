@@ -50,10 +50,6 @@ def get_forecastgroup_path(dscript_name):
     return dcf_name
 
 
-def daterange(start_date, end_date, interval=1):
-    for n in range(0, int((end_date - start_date).days), interval):
-        yield start_date + timedelta(n)
-
 def get_forecast_archive_dir(forecast_group_dir, forecast_date):
     """
     gets directory to search for forecast given forecast group and forecast date

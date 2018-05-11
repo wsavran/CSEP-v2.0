@@ -6,8 +6,7 @@ from load import load_data
 db_path = './csep_db'
 schema_path = './artifacts/table_schema.txt'
 # database fake data path
-tables = {'Models': './artifacts/testing_data/models.csv',
-          'ScheduledForecasts': './artifacts/testing_data/scheduled_forecasts.csv',
+tables = {'ScheduledForecasts': './artifacts/testing_data/scheduled_forecasts.csv',
           'ScheduledEvaluations': './artifacts/testing_data/scheduled_evaluations.csv',
           'Dispatchers': './artifacts/testing_data/dispatchers.csv',
           'ForecastGroups': './artifacts/testing_data/forecast_groups.csv',
@@ -16,6 +15,7 @@ tables = {'Models': './artifacts/testing_data/models.csv',
           'Forecasts': './artifacts/testing_data/forecasts.csv',
           'Catalogs': './artifacts/testing_data/catalogs.csv',
           'Dispatchers_ForecastGroups': './artifacts/testing_data/dispatchers_forecastgroups.csv'}
+
 join_tables = ['Dispatchers_ForecastGroups']
 
 # start fresh

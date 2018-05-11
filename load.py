@@ -50,6 +50,7 @@ def load_data(db_path, tables, join_tables=[]):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     for k, v in tables.items():
+        print('loading data for {}'.format(k))
         # need to handle join tables differently, bc composite private key must be explicitly imported
         if k not in join_tables:
             if verbose:
@@ -68,8 +69,7 @@ def load_data(db_path, tables, join_tables=[]):
 if __name__ == "__main__":
     db_path = './csep_db'
     # mapping from table name => data file
-    tables = {'Models': './artifacts/testing_data/models.csv',
-              'ScheduledForecasts': './artifacts/testing_data/scheduled_forecasts.csv',
+    tables = {'ScheduledForecasts': './artifacts/testing_data/scheduled_forecasts.csv',
               'ScheduledEvaluations': './artifacts/testing_data/scheduled_evaluations.csv',
               'Dispatchers': './artifacts/testing_data/dispatchers.csv',
               'ForecastGroups': './artifacts/testing_data/forecast_groups.csv',

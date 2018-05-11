@@ -1,6 +1,6 @@
-Dispatchers,dispatcher_script1.tcsh,dispatcher1.init.xml,dispatcher1.logfile,'test commandline args'
-Dispatchers,dispatcher_script2.tcsh,dispatcher2.init.xml,dispatcher2.logfile,
-Dispatchers,dispatcher_script3.tcsh,dispatcher3.init.xml,dispatcher3.logfile,
-Dispatchers,dispatcher_script4.tcsh,dispatcher4.init.xml,dispatcher4.logfile,
-Dispatchers,dispatcher_script5.tcsh,dispatcher5.init.xml,dispatcher5.logfile,
-Dispatchers,dispatcher_script6.tcsh,dispatcher6.init.xml,dispatcher6.logfile,
+Dispatchers,dispatcher_script1.tcsh,dispatcher1.init.xml,dispatcher1.logfile
+Dispatchers,dispatcher_script2.tcsh,dispatcher2.init.xml,dispatcher2.logfile
+Dispatchers,dispatcher_script3.tcsh,dispatcher3.init.xml,dispatcher3.logfile
+Dispatchers,dispatcher_script4.tcsh,dispatcher4.init.xml,dispatcher4.logfile
+Dispatchers,dispatcher_script5.tcsh,dispatcher5.init.xml,dispatcher5.logfile
+Dispatchers,dispatcher_script6.tcsh,dispatcher6.init.xml,dispatcher6.logfile

@@ -1,18 +1,27 @@
 CREATE TABLE IF NOT EXISTS ScheduledForecasts (
     scheduled_forecast_id INTEGER PRIMARY KEY,
     date_time TEXT NOT NULL,
+    status TEXT
+);
+
+CREATE TABLE IF NOT EXISTS Models (
+    model_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    executable TEXT,
+    language TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ScheduledEvaluations (
     scheduled_evaluation_id INTEGER PRIMARY KEY,
     date_time TEXT NOT NULL,
+    status TEXT
 );
 
 CREATE TABLE IF NOT EXISTS Dispatchers (
     dispatcher_id INTEGER PRIMARY KEY,
     script_name TEXT,
     config_file_name TEXT NOT NULL,
-    logfile TEXT,
+    logfile TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ForecastGroups (
@@ -36,6 +45,7 @@ CREATE TABLE IF NOT EXISTS Catalogs (
 
 CREATE TABLE IF NOT EXISTS Forecasts (
     forecast_id INTEGER PRIMARY KEY,
+    model_id INTEGER,
     dispatcher_id INTEGER,
     schedule_id INTEGER NOT NULL,
     group_id INTEGER NOT NULL,
@@ -46,7 +56,6 @@ CREATE TABLE IF NOT EXISTS Forecasts (
     start_datetime TEXT NOT NULL,
     runtime_testdate TEXT,
     waiting_period TEXT,
-    status TEXT
     FOREIGN KEY(model_id) REFERENCES Models,
     FOREIGN KEY(dispatcher_id) REFERENCES Dispatchers,
     FOREIGN KEY(schedule_id) REFERENCES ScheduledForecasts,
@@ -59,11 +68,11 @@ CREATE TABLE IF NOT EXISTS Evaluations (
     compute_datetime TEXT,
     scheduled_id INTEGER NOT NULL,
     catalog_id INTEGER,
-    evaluation_type TEXT,
+    evaluation_type_id INTEGER,
     forecast_id INTEGER,
     filepath TEXT,
-    status TEXT
     FOREIGN KEY(scheduled_id) REFERENCES ScheduledEvaluations,
+    FOREIGN KEY(evaluation_type_id) REFERENCES EvaluationTypes,
     FOREIGN KEY(catalog_id) REFERENCES Catalogs,
     FOREIGN KEY(forecast_id) REFERENCES Forecasts
 );

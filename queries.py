@@ -34,9 +34,12 @@ if __name__ == "__main__":
     cur = conn.cursor()
     stmnts = _read_statements('./artifacts/sql_queries.txt')
     results = []
+    query_no = 0
+
     for stmnt in stmnts:
         results.append(query(cur, stmnt))
     # grab only the first query
-    for result in results[7]:
+    for result in results[query_no]:
         for tup in result:
             print(tup)
+        print('\n')
