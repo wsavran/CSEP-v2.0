@@ -1,0 +1,79 @@
+SELECT Forecasts.name, Forecasts.start_datetime, ForecastGroups.group_name
+FROM Forecasts
+INNER JOIN ForecastGroups
+    ON Forecasts.group_id=ForecastGroups.forecastgroup_id;
+
+SELECT Forecasts.name, Forecasts.start_datetime, ForecastGroups.group_name, ScheduledForecasts.status
+FROM Forecasts
+JOIN ScheduledForecasts
+    ON Forecasts.schedule_id=ScheduledForecasts.scheduled_forecast_id
+JOIN ForecastGroups
+    ON Forecasts.group_id=ForecastGroups.forecastgroup_id
+WHERE ScheduledForecasts.status='Missing';
+
+SELECT Forecasts.name, strftime('%Y',Forecasts.start_datetime) as year, ForecastGroups.group_name, Dispatchers.script_name
+FROM Forecasts
+JOIN ForecastGroups
+    ON Forecasts.group_id=ForecastGroups.forecastgroup_id
+JOIN Dispatchers
+    ON Forecasts.dispatcher_id=Dispatchers.dispatcher_id
+WHERE year>'2018';
+
+SELECT Count(Forecasts.forecast_id), ForecastGroups.group_name, Dispatchers.script_name
+FROM Forecasts
+JOIN ForecastGroups
+    ON Forecasts.group_id=ForecastGroups.forecastgroup_id
+JOIN Dispatchers
+    ON Forecasts.dispatcher_id=Dispatchers.dispatcher_id
+GROUP BY ForecastGroups.group_name;
+
+SELECT Forecasts.name, EvaluationTypes.name, Forecasts.forecast_id
+FROM Evaluations
+JOIN Forecasts
+    ON Evaluations.forecast_id=Forecasts.forecast_id
+JOIN EvaluationTypes
+    ON Evaluations.evaluation_type_id=EvaluationTypes.evaluation_type_id
+JOIN ScheduledEvaluations
+    ON Evaluations.scheduled_id=ScheduledEvaluations.scheduled_evaluation_id
+WHERE ScheduledEvaluations.status='Completed';
+
+SELECT Forecasts.name, EvaluationTypes.name, Forecasts.forecast_id
+FROM Evaluations
+JOIN Forecasts
+    ON Evaluations.forecast_id=Forecasts.forecast_id
+JOIN EvaluationTypes
+    ON Evaluations.evaluation_type_id=EvaluationTypes.evaluation_type_id
+JOIN ScheduledEvaluations
+    ON Evaluations.scheduled_id=ScheduledEvaluations.scheduled_evaluation_id
+WHERE ScheduledEvaluations.status='Completed';
+
+SELECT Forecasts.name, Evaluations.filepath
+FROM Evaluations
+JOIN Forecasts
+    ON Evaluations.forecast_id=Forecasts.forecast_id
+JOIN ScheduledEvaluations
+    ON Evaluations.scheduled_id=ScheduledEvaluations.scheduled_evaluation_id
+WHERE strftime('%Y',Forecasts.start_datetime)='2018' AND ScheduledEvaluations.status='Completed';
+
+SELECT Forecasts.name, ForecastGroups.group_name, ScheduledEvaluations.status, Dispatchers.script_name,
+       ScheduledEvaluations.date_time, EvaluationTypes.name
+FROM Evaluations
+JOIN Forecasts
+    ON Evaluations.forecast_id=Forecasts.forecast_id
+JOIN ScheduledEvaluations
+    ON Evaluations.scheduled_id=ScheduledEvaluations.scheduled_evaluation_id
+JOIN EvaluationTypes
+    ON Evaluations.evaluation_type_id=EvaluationTypes.evaluation_type_id
+JOIN ForecastGroups
+    ON Forecasts.group_id=ForecastGroups.forecastgroup_id
+JOIN Dispatchers
+    ON Forecasts.dispatcher_id=Dispatchers.dispatcher_id
+WHERE ScheduledEvaluations.status='Scheduled';
+
+SELECT Forecasts.name, Evaluations.filepath
+FROM Evaluations
+JOIN Forecasts
+    ON Evaluations.forecast_id=Forecasts.forecast_id
+WHERE strftime('%Y',Forecasts.start_datetime)='2018';
+
+
