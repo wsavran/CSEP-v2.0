@@ -18,12 +18,11 @@ def _get_fields(cursor, table_name):
     except sqlite3.OperationalError:
         print("error: table {} does not exist in database".format(table_name))
         return []
-
     names = [f[0] for f in cursor.description]
     return names
 
 
-def _insert(cursor, table, fields, values):
+def insert(cursor, table, fields, values):
     num = len(values)
     if num == 0:
         print("Warning: Skipping inserts, no values found.")
@@ -41,7 +40,7 @@ def _insert_from_csv(filename, cursor, table, fields):
         reader = csv.reader(f)
         for row in reader:
             quote_row = ['"' + item + '"' for item in row[1:]]
-            if not _insert(cursor, table, fields, ', '.join(quote_row)):
+            if not insert(cursor, table, fields, ', '.join(quote_row)):
                 return False
     return True
 

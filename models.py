@@ -7,47 +7,166 @@ from ForecastGroupInitFile import ForecastGroupInitFile
 from DispatcherInitFile import DispatcherInitFile
 from utils import text_to_datetime
 
-verbose = False
+"""
+TODO: 1) re-evaluate data model and eliminate any wasted or unnecessary fields
+      2) while doing this, make sure that we aren't missing anything we might want to know from CSEP1.
+      3) implement missing pieces in data model. remember. field names should be text or model class
+      4) write script to use the api to populate database with csep-debug data, for all forecasts and 
+         evaluations for one-day-models class
+"""
 
 
-# parent class for database model, to ensure that same cursor is used by all models
 class Model:
-    def __init__(self, db=None):
-        self.db = db
-        self._cur = None
-        if db:
-            # set attributes used for all classes
+
+    _table_type = "standard"
+
+    def __init__(self, conn=None):
+        self._insert_id = None
+        self._conn = conn
+        self.table = None
+        self.fields = []
+        self._insert_values = {}
+        self._inserted = False
+
+        if self._conn:
             self.table = self.__class__.__name__
-            Model._cur = sqlite3.connect(db).cursor()
-            self.__set_fields()
+            self.fields = self._fields()
+
+    def _prepare_insert_values(self, field, value):
+        if isinstance(value, Model) and not self._inserted:
+            # recursive call, will stop when no models have more dependencies
+            value.insert()
+            last_insert_id = value.insert_id
+            # cast inserts to string type. ok for basic types in database.
+            # could cause problems if api is used incorrectly.
+            self._insert_values[field] = '"' + str(last_insert_id) + '"'
+        else:
+            self._insert_values[field] = '"' + str(value) + '"'
+        return
+
+    def insert(self):
+        """
+        insert model into the database.
+        requirements: each db field must be defined as an attribute of the class itself or an instance of Model, in which
+        case that Model will be inserted and the "insert_id" of that insert will be used as the insert value.
+        this will be recursively called for each model that needs to be inserted
+        :return: (bool) True if successful; False if not successful
+        """
+        if not self.conn and not self.fields and not self.table:
+            raise RuntimeError("Cannot insert values into db unless connection object is bound to Model instance.")
+
+        # get fields and values from class
+        fields_values = list(self._db_values())
+        num = len(fields_values)
+        if num == 0 or not fields_values:
+            print("Warning: Skipping inserts, no values found.")
+            return False
+        try:
+            # check if any of the values are model objects
+            for field, value in fields_values:
+                self._prepare_insert_values(field, value)
+
+            fields, values = zip(*self._insert_values.items())
+            fields = ', '.join(fields)
+            values = ', '.join(values)
+
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO {0} ({1}) VALUES ({2})".format(self.table, fields, values))
+
+            # update insert id for fk purposes
+            self._insert_id = cursor.lastrowid
+            self._inserted = True
+
+        except sqlite3.IntegrityError:
+            print("Warning: Integrity Error, Unique constraint failed for table {}".format(self.table))
+            return False
+
+        return True
+
+    def save(self):
+        """
+        no error checking here.
+        :return:
+        """
+        if self._inserted:
+            self.conn.commit()
+        else:
+            raise RuntimeError("Error: cannot save the same database model twice.")
 
     @property
-    def cur(self):
-        return self._cur
+    def insert_id(self):
+        """
+        read-only instance of insert_id used for foreign key inserts
+        :return:
+        """
+        return self._insert_id
 
-    def __set_fields(self):
+    @property
+    def conn(self):
+        return self._conn
+
+    @conn.setter
+    def conn(self, val):
         """
-        get field names from sqlite3 database, and set as class members
+        setter for db connection object. sets db information when connection object is assigned.
+        :param val: connection object.
+        :return:
         """
+        if isinstance(sqlite3.Connection, val):
+            self._conn = val
+            self.fields = self._fields()
+            self.table = self.__class__.__name__
+        else:
+            raise TypeError("conn must be of type sqlite3.Connection")
+
+    def _fields(self):
+        """
+        return list of field names from sqlite3 database
+        """
+        if not self.conn:
+            raise RuntimeError("Db connection must be bound to Model instance to retrieve fields.")
+
+        cursor = self.conn.cursor()
+        cursor.execute("select * from {}".format(self.table))
+        fields = [f[0] for f in cursor.description]
+
+        if self._table_type == 'join':
+            return fields
+        # ignore private key, unless join table
+        return fields[1:]
+
+    def _db_values(self):
+        """
+        get values of fields from model classes. classes are required to have fields names defined exactly the same
+        also, values are assumed to be of the correct type to put into sql database (or can be defined as text)
+        :return:
+        """
+        if not self.conn:
+            raise RuntimeError("connection object must be defined to have access to db fields.")
+
+        if not self.fields:
+            raise RuntimeError("fields not defined. connection object must be defined to have access to db fields.")
+
+        # generate values
         try:
-            self.cur.execute("select * from {}".format(self.table))
-            for f in self.cur.description:
-                setattr(self, "_"+f[0], f[0])
-        except sqlite3.OperationalError:
-            print("Error: table {} does not exist in database".format(self.table))
+            for field in self.fields:
+                value = getattr(self, field)
+                yield field, value
+        except AttributeError:
+            print("Error: Unable to retrieve attributes. Ensure that Model has attributes corresponding to DB fields.")
 
 
-class Schedule(Model):
+class Schedule:
 
     end_date = datetime(2019, 1, 1, 0, 0, 0)
-    type = 'GenericScheduled'
 
     def __init__(self, start_date=None, **kwargs):
         super().__init__(**kwargs)
-        self.date_time_text = None
-        self.start_date = start_date
+        self.date_time = None
+        self.status = None
+        self.start_date = start_date  # should be datetime object
         if self.start_date:
-            self.date_time_text = self.datetime_to_text()
+            self.date_time = self.datetime_to_text()
 
     def text_to_datetime(self):
         """
@@ -55,7 +174,7 @@ class Schedule(Model):
         :param datetime_string: string in format MM-DD-YYYY HH:MM:SS
         :return: datetime object
         """
-        return datetime.strptime(self.start_date_text, '%Y-%m-%d %H:%M:%S')
+        return datetime.strptime(self.date_time, '%Y-%m-%d %H:%M:%S')
 
     def datetime_to_text(self):
         """
@@ -75,15 +194,16 @@ class Schedule(Model):
             return iter([])
 
 
-class ScheduledForecasts(Schedule):
-    type = 'Forecast'
+class ScheduledForecasts(Model, Schedule):
+    pass
 
 
-class ScheduledEvaluations(Schedule):
-    type = 'Evaluation'
+class ScheduledEvaluations(Model, Schedule):
+    pass
 
 
 class Dispatchers(Model):
+
     def __init__(self, script_name, **kwargs):
         super().__init__(**kwargs)
         self.script_name = script_name
@@ -96,7 +216,7 @@ class Dispatchers(Model):
 
     def forecast_groups(self):
         for group in self.group_paths():
-            yield ForecastGroups(group_path=group)
+            yield ForecastGroups(group_path=group, conn=self.conn)
 
     def group_paths(self):
         for group in self.forecast_group_paths:
@@ -125,7 +245,7 @@ class Dispatchers(Model):
 
 
 class ForecastGroups(Model):
-    # we will only store the name of the hybrid and bayesian models
+    # store the name of the hybrid and bayesian models
     hybridModel = 'hybridModel'
     genericModel = 'models'
     bayesianModel = 'BayesianModel'
@@ -164,10 +284,18 @@ class ForecastGroups(Model):
                 self.entry_date = datetime.strptime(self.entry_date_text, '%Y-%m-%d %H:%M:%S')
 
     def parse_entry_date_text(self):
+        """
+        reads the entry date tag from the forecast group init file
+        :return: contents of the entry-date tag
+        """
         return self.fg.elementValue('entryDate')
 
     def schedule(self):
-        s = Schedule(start_date=self.entry_date)
+        """
+        generator function to create dates used to expect forecasts and evaluations
+        :return:
+        """
+        s = Schedule(start_date=self.entry_date, conn=self.conn)
         if self.entry_date:
             for date in s.date_range():
                 yield date
@@ -175,19 +303,35 @@ class ForecastGroups(Model):
             return iter([])
 
     def forecasts(self):
+        """
+        generator function to return forecasts associated with a particular forecast group
+        :return:
+        """
         for model in self.models:
-            yield Forecasts(name=model, )
+            for date in self.schedule():
+                yield Forecasts(name=model, archive_dir=self.forecast_dir, start_date=date, forecast_group=self,
+                                conn=self.conn)
 
     def evaluations(self):
-        for elem in self.fg.next('evaluationTests'):
-            # get directory
-            tests = self.parse_evaluation_tests(elem)
-            for date in self.schedule():
-                for test in tests:
-                    for model in self.models:
-                        yield Evaluations(name=test, date=date, archive_dir=self.result_dir, forecast_name=model)
+        """
+        generator function to produce evaluations associated with a forecast group. note: evaluations made from the
+        forecast group level do not have any association to a particular forecast. if wanting to populate a db model
+        use the generator in class Forecasts(...)
+        :return:
+        """
+        if not self.evaluation_tests:
+            return iter([])
+        for date in self.schedule():
+            for test in self.evaluation_tests:
+                for model in self.models:
+                    yield Evaluations(name=test, date=date, archive_dir=self.result_dir, forecast_name=model,
+                                      conn=self.conn)
 
     def parse_forecast_dir(self):
+        """
+        reads location of forecasts stored in forecast group init file
+        :return: full path of directory where forecast archive is located
+        """
         fcdir_path = self.fg.elementValue('forecastDir')
         if not fcdir_path:
             return None
@@ -196,6 +340,10 @@ class ForecastGroups(Model):
         return os.path.join(self.group_path, fcdir_path)
 
     def parse_result_dir(self):
+        """
+        reads locations of results from forecast group init file
+        :return: full path of directory where evaluations are stored
+        """
         resdir_path = self.fg.elementValue('resultDir')
         if not resdir_path:
             return None
@@ -204,6 +352,10 @@ class ForecastGroups(Model):
         return os.path.join(self.group_path, resdir_path)
 
     def parse_postprocessing(self):
+        """
+        reads postprocessing
+        :return:
+        """
         return self.fg.elementValue('postProcessing')
 
     def parse_group_name(self):
@@ -295,42 +447,74 @@ class Catalogs(Model):
 
 
 class Forecasts(Model):
-    forecast_extension = '-fromXML.dat'
-    forecast_meta_extension = '-fromXML.dat.meta'
+    forecast_extension = '.xml'
+    forecast_meta_extension = 'xml.meta'
 
-    def __init__(self, name=None, period=None, **kwargs):
-        print('In Constructor of Forecasts')
+    def __init__(self, name=None, period=None, archive_dir=None, start_date=None, forecast_group=None, **kwargs):
         super().__init__(**kwargs)
-        self.archive_dir = None
+        self.waiting_period = None  # TODO: Not implemented
+        self.runtime_testdate = None  # TODO: Not implemented
+        self.catalog = None  # TODO: Not implemented
+        self.dispatcher = None  # TODO: Not implemented
+        self.model = None  # Starting this attribute as NULL. Might consider removing from db model in future.
+        self.forecast_group = forecast_group
+        self.archive_dir = archive_dir
         self.period = period
         self.start_datetime = start_date
         self.name = name
-        self.relative_filepath = self.get_filename()
-        self.relative_meta_filepath = self.get_metafilename()
+        self.filepath = self.get_filename()
+        self.meta_filepath = self.get_metafilename()
 
     def get_filename(self):
-        self.relative_filepath = self.name + '_' + self.start_datetime + '_' + self.forecast_extension
-        return self.filepath
+        """
+        filename for a forecast file
+        template -- <model_name>_<month>_<day>_<year>.xml
+        :return: filename if found, None if not found
+        """
+        relative_filepath = self.name + '_' + self.start_datetime.strftime("%-m_%-d_%Y") + self.forecast_extension
+        archive_subdir = self.start_datetime.strftime("%Y_%-m")
+        abs_path = os.path.join(self.archive_dir, 'archive', archive_subdir, relative_filepath)
+        if os.path.isfile(abs_path):
+            return abs_path
+        return None
 
     def get_metafilename(self):
-        self.relative_meta_filepath = self.name + '_' + self.start_datetime + '_' + self.forecast_meta_extension
-        return self.meta_filepath
+        """
+        filename for a forecast metadata file
+        template -- <model_name>_<month>_<day>_<year>.xml
+        :return: filename if found, None if not found
+        """
+        relative_filepath = self.name + '_' + self.start_datetime.strftime("%-m_%-d_%Y") + self.forecast_meta_extension
+        abs_path = os.path.join(self.archive_dir, 'archive', self.start_datetime.strftime("%Y_%-m"), relative_filepath)
+        if os.path.isfile(abs_path):
+            return abs_path
+        return None
 
-    def update_name(self, name):
-        self.name = name
-        self.get_filename()
-        self.get_metafilepath()
+    def evaluations(self):
+        """
+        generator function to produce evaluations for a given forecast
+        :return: evaluation object or empty iterator if none
+        """
+        if self.name and self.forecast_group.result_dir and self.forecast_group:
+            for test in self.forecast_group.evaluation_tests:
+                yield Evaluations(name=test, date=self.start_datetime, archive_dir=self.forecast_group.result_dir,
+                                  forecast_name=self.name, conn=self.conn)
+        else:
+            return iter([])
 
 
 class Evaluations(Model):
     def __init__(self, archive_dir=None, date=None, name=None, forecast_name=None, **kwargs):
         super().__init__(**kwargs)
-        self.forecast_group_archive_dir = archive_dir
         self.daily_archive_dir = None
+        self.full_filepath = None
+        self.forecast = None  # TODO: not implemented
+        self.catalog = None  # TODO: not implemented
+        self.compute_datetime = None  # TODO: not implemented
+        self.forecast_group_archive_dir = archive_dir
         self.date = date  # should be datetime object
         self.name = name
         self.forecast_name = forecast_name
-        self.full_filepath = None
         self._list_of_result_files = []
         if self.date and self.forecast_group_archive_dir:
             self.daily_archive_dir = os.path.join(
@@ -340,28 +524,46 @@ class Evaluations(Model):
             if not self._list_of_result_files:
                 self._list_of_result_files = os.listdir(self.daily_archive_dir)
             if self.name and self.daily_archive_dir:
-                self.full_filepath = self.determine_full_filepath(regex=self.capture_regex())
+                self.full_filepath = self.determine_full_filepath(regex=self._build_regex())
 
-    def capture_regex(self):
+    def _build_regex(self):
+        """
+        internal function to create regex for evaluation files
+        :return: regex object
+        """
         year = self.date.strftime("%Y")
         month = self.date.strftime("%-m")
         day = self.date.strftime("%-d")
-        p = re.compile(r"^scec\.csep\S*_{}-Test_{}_{}_{}_{}-fromXML.xml.\S*.\d$"
+        p = re.compile(r"^scec\.csep\S*{}-Test_{}_{}_{}_{}-fromXML.xml"
                        .format(self.name, self.forecast_name, month, day, year))
-        print(p)
         return p
 
     def determine_full_filepath(self, regex=None):
-        # not sure what MapReady means, but they do not
+        """
+        locates evaluation files in the results directory
+        :param regex: regex object
+        :return: list of found forecast files, empty list if none
+        """
         paths = self._list_of_result_files
-        print(paths)
-        matches = list(filter(regex.match, paths))
-        return matches
+        filters = [regex.match, lambda x: not x.endswith('.meta')]
+        matches = [path for path in paths if all(f(path) for f in filters)]
+        # apply full filename
+        full = list(map(lambda x: os.path.join(self.daily_archive_dir, x), matches))
+        return full
 
 
-class DispatchersForecastGroups(Model):
-    def __init__(self, **kwargs):
+class Dispatchers_ForecastGroups(Model):
+
+    """
+    to support ManyToMany relationships the join table must be manually populated
+    """
+    _table_type = "join"
+
+    def __init__(self, dispatcher_id=None, group_id=None, **kwargs):
         super().__init__(**kwargs)
+        self.dispatcher_id = dispatcher_id
+        self.group_id = group_id
+
 
 
 
