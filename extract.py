@@ -14,6 +14,7 @@ sql_statements = './table_schema_light.txt'
 create_schema(sql_statements, db_name)
 
 db = sqlite3.connect('db_name')
+
 # start with ANSS one-day catalogs
 dispatcher = Dispatchers("/usr/local/csep/cronjobs/dispatcher_ANSS1985_one_day.init.xml", conn=db)
 for group in dispatcher.forecast_groups():

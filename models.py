@@ -161,8 +161,10 @@ class Schedule:
 
     def __init__(self, start_date, entry_date=None, **kwargs):
         super().__init__(**kwargs)
-        self.date_time = None
-        self.status = None
+
+        # db fields
+        self.date_time = ''
+
         self.start_date = start_date  # should be datetime object
         if self.start_date and isinstance(start_date, datetime):
             self.date_time = self.datetime_to_text()

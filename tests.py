@@ -13,7 +13,7 @@ class TestInsert(unittest.TestCase):
     should insert into the database testing the following behavior:
     1) insert_id corresponds to the lastinsertid from the database
     2) model with foreign key inserted correctly
-    3) model with join table inserted correctly
+    3) model with two levels of foreign keys inserted correctly
     4) model with no foreign key inserted correctly
     """
     def setUp(self):
