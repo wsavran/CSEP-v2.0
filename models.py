@@ -1,17 +1,16 @@
 import os
 import re
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from ForecastGroupInitFile import ForecastGroupInitFile
 from DispatcherInitFile import DispatcherInitFile
-from utils import text_to_datetime
+from artifacts.utils import text_to_datetime
 
 """
-TODO: 1) re-evaluate data model and eliminate any wasted or unnecessary fields
-      2) while doing this, make sure that we aren't missing anything we might want to know from CSEP1.
-      3) implement missing pieces in data model. remember. field names should be text or model class
-      4) write script to use the api to populate database with csep-debug data, for all forecasts and 
+
+TODO: 1) debug and propagate changes to models in api
+      2) write script to use the api to populate database with csep-debug data, for all forecasts and 
          evaluations for one-day-models class
 """
 
@@ -160,13 +159,15 @@ class Schedule:
 
     end_date = datetime(2019, 1, 1, 0, 0, 0)
 
-    def __init__(self, start_date=None, **kwargs):
+    def __init__(self, start_date, entry_date=None, **kwargs):
         super().__init__(**kwargs)
         self.date_time = None
         self.status = None
         self.start_date = start_date  # should be datetime object
-        if self.start_date:
+        if self.start_date and isinstance(start_date, datetime):
             self.date_time = self.datetime_to_text()
+        else:
+            raise AttributeError("start date must be datetime object.")
 
     def text_to_datetime(self):
         """
@@ -204,19 +205,26 @@ class ScheduledEvaluations(Model, Schedule):
 
 class Dispatchers(Model):
 
-    def __init__(self, script_name, **kwargs):
+    def __init__(self, script_name, config_file_name=None, **kwargs):
         super().__init__(**kwargs)
         self.script_name = script_name
-        self.config_file_name = None
-        self.logfile = None
+        self.config_file_name = config_file_name
         self.forecast_group_paths = []
-        self.parse_config_file()
+
+        # populate db fields
+        if self.script_name:
+            self.parse_config_file()
+        else:
+            raise AttributeError("script name cannot be none.")
+
         if self.config_file_name:
             self.parse_forecastgroup_path()
+        else:
+            raise AttributeError("config filename cannot be none.")
 
     def forecast_groups(self):
-        for group in self.group_paths():
-            yield ForecastGroups(group_path=group, conn=self.conn)
+        for group_path in self.group_paths():
+            yield ForecastGroups(group_path, self, conn=self.conn)
 
     def group_paths(self):
         for group in self.forecast_group_paths:
@@ -251,23 +259,28 @@ class ForecastGroups(Model):
     bayesianModel = 'BayesianModel'
     end_date = Schedule.end_date
 
-    def __init__(self, group_path=None, **kwargs):
+    def __init__(self, group_path, dispatcher_id,
+                 config_filepath=None, group_name=None, **kwargs):
         super().__init__(**kwargs)
         self.entry_date = None
         self.result_dir = None
         self.post_processing = None
         self.group_path = None
         self.fg = None
-        self.group_name = None
-        self.config_filepath = None
         self.group_dir = None
         self.forecast_dir = None
         self.result_dir = None
         self.post_processing = None
         self.entry_date = None
         self.models = []
+        self.group_path = group_path
+
+        # database fields
+        self.group_name = group_name
+        self.config_filepath = config_filepath
+        self.dispatcher_id = dispatcher_id
+
         if group_path:
-            self.group_path = group_path
             self.fg = ForecastGroupInitFile(self.group_path)
             self.group_name = self.parse_group_name()
             self.config_filepath = os.path.join(self.group_path, 'forecast.init.xml')
@@ -290,15 +303,18 @@ class ForecastGroups(Model):
         """
         return self.fg.elementValue('entryDate')
 
-    def schedule(self):
+    def schedule(self, schedule_type):
         """
         generator function to create dates used to expect forecasts and evaluations
         :return:
         """
-        s = Schedule(start_date=self.entry_date, conn=self.conn)
         if self.entry_date:
+            s = Schedule(self.entry_date, conn=self.conn)
             for date in s.date_range():
-                yield date
+                if schedule_type == 'forecast':
+                    yield ScheduledForecasts(date)
+                elif schedule_type == 'evaluation':
+                    yield ScheduledEvaluations(date)
         else:
             return iter([])
 
@@ -307,25 +323,25 @@ class ForecastGroups(Model):
         generator function to return forecasts associated with a particular forecast group
         :return:
         """
-        for model in self.models:
-            for date in self.schedule():
-                yield Forecasts(name=model, archive_dir=self.forecast_dir, start_date=date, forecast_group=self,
-                                conn=self.conn)
+        for name in self.models:
+            for schedule in self.schedule('forecast'):
+                yield Forecasts(schedule, self, name, self.forecast_dir, conn=self.conn)
 
     def evaluations(self):
         """
-        generator function to produce evaluations associated with a forecast group. note: evaluations made from the
-        forecast group level do not have any association to a particular forecast. if wanting to populate a db model
-        use the generator in class Forecasts(...)
-        :return:
+            generator function to produce evaluations associated with a forecast group. note: evaluations made from the
+            forecast group level do not have any association to a particular forecast. if wanting to populate a db model
+            use the generator in class Forecasts(...)
+            :return:
         """
         if not self.evaluation_tests:
             return iter([])
-        for date in self.schedule():
+        for schedule in self.schedule('evaluation'):
             for test in self.evaluation_tests:
-                for model in self.models:
-                    yield Evaluations(name=test, date=date, archive_dir=self.result_dir, forecast_name=model,
-                                      conn=self.conn)
+                for forecast in self.forecasts:
+                    yield Evaluations(schedule, forecast, self.result_dir, test, conn=self.conn)
+                    pass
+
 
     def parse_forecast_dir(self):
         """
@@ -439,31 +455,48 @@ class ForecastGroups(Model):
         return text_to_datetime(date_string)
 
 
-class Catalogs(Model):
-    def __init__(self):
-        self.data_filename = None
-        self.creation_date = None
-        self.post_processing = None
-
-
 class Forecasts(Model):
     forecast_extension = '.xml'
     forecast_meta_extension = 'xml.meta'
 
-    def __init__(self, name=None, period=None, archive_dir=None, start_date=None, forecast_group=None, **kwargs):
+    def __init__(self, schedule_id, group_id, name, archive_dir,
+                 filepath=None, runtime_testdate=None, waiting_period=None, logfile=None, status=None,
+                 **kwargs):
         super().__init__(**kwargs)
-        self.waiting_period = None  # TODO: Not implemented
-        self.runtime_testdate = None  # TODO: Not implemented
-        self.catalog = None  # TODO: Not implemented
-        self.dispatcher = None  # TODO: Not implemented
-        self.model = None  # Starting this attribute as NULL. Might consider removing from db model in future.
-        self.forecast_group = forecast_group
-        self.archive_dir = archive_dir
-        self.period = period
-        self.start_datetime = start_date
+
+        # database fields
+        self.schedule_id = schedule_id
+        self.group_id = group_id
+        self.filepath = filepath
         self.name = name
+        self.logfile = logfile
+        self.status = status
+        self.waiting_period = waiting_period
+        self.runtime_testdate = runtime_testdate
+
+        # should be passed in from forecast group generator
+        self.archive_dir = archive_dir
+
         self.filepath = self.get_filename()
         self.meta_filepath = self.get_metafilename()
+
+        if self.filepath:
+            if os.path.isfile(self.filepath):
+                self.status = "Complete"
+            else:
+                self.status = "Missing"
+
+        if self.meta_filepath:
+            self.waiting_period = self.parse_with_regex(r'--waitingPeriod=(\S*)')
+            self.runtime_testdate = self.parse_with_regex(r'--runtimeTestDate=(\S*)')
+            self.logfile = self.parse_with_regex(r'--logFile=(\S*)')
+
+    def parse_with_regex(self, regex_string):
+        p = re.compile(regex_string)
+        with open(self.meta_filepath, 'r') as f:
+            lines = f.readlines()
+        para = ''.join(lines).strip()
+        return p.search(para).group(1)
 
     def get_filename(self):
         """
@@ -495,36 +528,52 @@ class Forecasts(Model):
         generator function to produce evaluations for a given forecast
         :return: evaluation object or empty iterator if none
         """
-        if self.name and self.forecast_group.result_dir and self.forecast_group:
-            for test in self.forecast_group.evaluation_tests:
-                yield Evaluations(name=test, date=self.start_datetime, archive_dir=self.forecast_group.result_dir,
-                                  forecast_name=self.name, conn=self.conn)
+        if self.name and self.group_id.result_dir:
+            for test in self.group_id.evaluation_tests:
+                schedule = ScheduledEvaluations(self.schedule_id.start_date)
+                yield Evaluations(schedule, self, self.group_id.result_dir, test, conn=self.conn)
         else:
             return iter([])
 
 
 class Evaluations(Model):
-    def __init__(self, archive_dir=None, date=None, name=None, forecast_name=None, **kwargs):
+    def __init__(self, scheduled_id, forecast_id, archive_dir, evaluation_name, filepath='', status='',
+                 compute_datetime='', **kwargs):
         super().__init__(**kwargs)
+
+        # database fields
+        self.scheduled_id = scheduled_id
+        self.forecast_id = forecast_id
+        self.name = evaluation_name
+        self.filepath = filepath
+        self.status = status
+        self.compute_datetime = compute_datetime
+
         self.daily_archive_dir = None
-        self.full_filepath = None
-        self.forecast = None  # TODO: not implemented
-        self.catalog = None  # TODO: not implemented
-        self.compute_datetime = None  # TODO: not implemented
+        self.meta_filepath = None
         self.forecast_group_archive_dir = archive_dir
-        self.date = date  # should be datetime object
-        self.name = name
-        self.forecast_name = forecast_name
+        self.relative_filepath = filepath
+
+        self.date = scheduled_id.date_time  # get from scheduled_id
+        self.forecast_name = forecast_id.name
         self._list_of_result_files = []
         if self.date and self.forecast_group_archive_dir:
             self.daily_archive_dir = os.path.join(
                 self.forecast_group_archive_dir,
-                date.strftime("%Y-%m-%d")
+                self.date.strftime("%Y-%m-%d")
             )
-            if not self._list_of_result_files:
-                self._list_of_result_files = os.listdir(self.daily_archive_dir)
+            self._list_of_result_files = os.listdir(self.daily_archive_dir)
+
+            # determine if evaluation exists on server
             if self.name and self.daily_archive_dir:
-                self.full_filepath = self.determine_full_filepath(regex=self._build_regex())
+                self.filepath = self.determine_full_filepath(regex=self._build_regex())
+                self.meta_filepath = self.determine_meta_filepath(regex=self._build_regex())
+
+            # set status of evaluation
+            if self.filepath:
+                self.status = "Complete"
+            else:
+                self.status = "Missing"
 
     def _build_regex(self):
         """
@@ -549,20 +598,23 @@ class Evaluations(Model):
         matches = [path for path in paths if all(f(path) for f in filters)]
         # apply full filename
         full = list(map(lambda x: os.path.join(self.daily_archive_dir, x), matches))
-        return full
+        return ', '.join(full)
+
+    def determine_meta_filepath(self, regex=None):
+        """
+        locates evaluation files in the results directory
+        :param regex: regex object
+        :return: list of found forecast files, empty list if none
+        """
+        paths = self._list_of_result_files
+        filters = [regex.match, lambda x: x.endswith('.meta')]
+        matches = [path for path in paths if all(f(path) for f in filters)]
+        # apply full filename
+        full = list(map(lambda x: os.path.join(self.daily_archive_dir, x), matches))
+        return ', '.join(full)
 
 
-class Dispatchers_ForecastGroups(Model):
 
-    """
-    to support ManyToMany relationships the join table must be manually populated
-    """
-    _table_type = "join"
-
-    def __init__(self, dispatcher_id=None, group_id=None, **kwargs):
-        super().__init__(**kwargs)
-        self.dispatcher_id = dispatcher_id
-        self.group_id = group_id
 
 
 

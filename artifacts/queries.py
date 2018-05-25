@@ -32,7 +32,7 @@ def _read_statements(filename):
 if __name__ == "__main__":
     conn = sqlite3.connect('./csep_db')
     cur = conn.cursor()
-    stmnts = _read_statements('./artifacts/sql_queries.txt')
+    stmnts = _read_statements('./sql_queries.txt')
     results = []
     query_no = 0
 
