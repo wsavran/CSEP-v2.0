@@ -1,10 +1,6 @@
 import os, sys
 import sqlite3
 
-# script variables
-db_name = 'csep_db'
-debug = True
-
 
 def create_schema(filename=None, db_filename=None):
     """
@@ -23,7 +19,7 @@ def create_schema(filename=None, db_filename=None):
         sys.exit(-1)
 
     # creates new db if it does not exist, and calls cursor object
-    db = sqlite3.connect(db_name)
+    db = sqlite3.connect(db_filename)
 
     try:
         # use 'with' to cleanly close file
@@ -48,18 +44,7 @@ def create_schema(filename=None, db_filename=None):
             raise
         sys.exit(-1)
 
-    return
+    db.commit()
 
-
-if __name__ == "__main__":
-    # make database
-    create_schema("./table_schema.txt", db_name)
-
-
-
-
-
-
-
-
+    return db
 

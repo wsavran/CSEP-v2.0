@@ -152,14 +152,55 @@ class Model:
                 value = getattr(self, field)
                 yield field, value
         except AttributeError:
-            print("Error: Unable to retrieve attributes. Ensure that Model has attributes corresponding to DB fields.")
+            print("Error: Unable to retrieve attributes. Ensure that {} has attributes corresponding to DB fields."
+                  .format(self.table))
 
 
 class Schedule:
 
     end_date = datetime(2019, 1, 1, 0, 0, 0)
 
-    def __init__(self, start_date, entry_date=None, **kwargs):
+    def __init__(self, start_date):
+
+        # db fields
+        self.date_time = ''
+
+        self.start_date = start_date  # should be datetime object
+        if self.start_date and isinstance(start_date, datetime):
+            self.date_time = self.datetime_to_text()
+        else:
+            raise AttributeError("start date must be datetime object.")
+
+    def text_to_datetime(self):
+        """
+        convert text in sqlite3 database to python datetime object
+        :param datetime_string: string in format MM-DD-YYYY HH:MM:SS
+        :return: datetime object
+        """
+        return datetime.strptime(self.date_time, '%Y-%m-%d %H:%M:%S')
+
+    def datetime_to_text(self):
+        """
+        covert python3 datetime object to text string to store in sqlite3 database
+        :param datetime_object: python3 datetime object
+        :return: string containing datetime in format MM-DD-YYYY HH:MM:SS
+        """
+        return str(self.start_date)
+
+    def date_range(self, days=1, months=0, years=0):
+        date = self.start_date
+        if date:
+            while date < self.end_date:
+                yield date
+                date += relativedelta(days=days, months=months, years=years)
+        else:
+            return iter([])
+
+
+class ScheduledForecasts(Model):
+    end_date = datetime(2019, 1, 1, 0, 0, 0)
+
+    def __init__(self, start_date, **kwargs):
         super().__init__(**kwargs)
 
         # db fields
@@ -197,12 +238,45 @@ class Schedule:
             return iter([])
 
 
-class ScheduledForecasts(Model, Schedule):
-    pass
+class ScheduledEvaluations(Model):
+    end_date = datetime(2019, 1, 1, 0, 0, 0)
 
+    def __init__(self, start_date, **kwargs):
+        super().__init__(**kwargs)
 
-class ScheduledEvaluations(Model, Schedule):
-    pass
+        # db fields
+        self.date_time = ''
+
+        self.start_date = start_date  # should be datetime object
+        if self.start_date and isinstance(start_date, datetime):
+            self.date_time = self.datetime_to_text()
+        else:
+            raise AttributeError("start date must be datetime object.")
+
+    def text_to_datetime(self):
+        """
+        convert text in sqlite3 database to python datetime object
+        :param datetime_string: string in format MM-DD-YYYY HH:MM:SS
+        :return: datetime object
+        """
+        return datetime.strptime(self.date_time, '%Y-%m-%d %H:%M:%S')
+
+    def datetime_to_text(self):
+        """
+        covert python3 datetime object to text string to store in sqlite3 database
+        :param datetime_object: python3 datetime object
+        :return: string containing datetime in format MM-DD-YYYY HH:MM:SS
+        """
+        return str(self.start_date)
+
+    def date_range(self, days=1, months=0, years=0):
+        date = self.start_date
+        if date:
+            while date < self.end_date:
+                yield date
+                date += relativedelta(days=days, months=months, years=years)
+        else:
+            return iter([])
 
 
 class Dispatchers(Model):
@@ -215,7 +289,7 @@ class Dispatchers(Model):
 
         # populate db fields
         if self.script_name:
-            self.parse_config_file()
+            self.config_file_name = self.parse_config_file()
         else:
             raise AttributeError("script name cannot be none.")
 
@@ -239,10 +313,10 @@ class Dispatchers(Model):
         para = ''.join(lines).strip()
         try:
             # should be regex capture group 1
-            self.config_file_name = p.search(para).group(1)
+            return p.search(para).group(1)
         except AttributeError:
             print('Warning: Could not parse config file name from dispatcher script')
-            self.config_file_name = None
+            return None
 
     def parse_forecastgroup_path(self):
         if self.config_file_name:
@@ -311,12 +385,12 @@ class ForecastGroups(Model):
         :return:
         """
         if self.entry_date:
-            s = Schedule(self.entry_date, conn=self.conn)
+            s = Schedule(self.entry_date)
             for date in s.date_range():
                 if schedule_type == 'forecast':
-                    yield ScheduledForecasts(date)
+                    yield ScheduledForecasts(date, conn=self.conn)
                 elif schedule_type == 'evaluation':
-                    yield ScheduledEvaluations(date)
+                    yield ScheduledEvaluations(date, conn=self.conn)
         else:
             return iter([])
 
@@ -342,8 +416,6 @@ class ForecastGroups(Model):
             for test in self.evaluation_tests:
                 for forecast in self.forecasts:
                     yield Evaluations(schedule, forecast, self.result_dir, test, conn=self.conn)
-                    pass
-
 
     def parse_forecast_dir(self):
         """
@@ -506,8 +578,8 @@ class Forecasts(Model):
         template -- <model_name>_<month>_<day>_<year>.xml
         :return: filename if found, None if not found
         """
-        relative_filepath = self.name + '_' + self.start_datetime.strftime("%-m_%-d_%Y") + self.forecast_extension
-        archive_subdir = self.start_datetime.strftime("%Y_%-m")
+        relative_filepath = self.name + '_' + self.schedule_id.start_date.strftime("%-m_%-d_%Y") + self.forecast_extension
+        archive_subdir = self.schedule_id.start_date.strftime("%Y_%-m")
         abs_path = os.path.join(self.archive_dir, 'archive', archive_subdir, relative_filepath)
         if os.path.isfile(abs_path):
             return abs_path
@@ -519,8 +591,11 @@ class Forecasts(Model):
         template -- <model_name>_<month>_<day>_<year>.xml
         :return: filename if found, None if not found
         """
-        relative_filepath = self.name + '_' + self.start_datetime.strftime("%-m_%-d_%Y") + self.forecast_meta_extension
-        abs_path = os.path.join(self.archive_dir, 'archive', self.start_datetime.strftime("%Y_%-m"), relative_filepath)
+        relative_filepath = self.name + '_' + \
+                            self.schedule_id.start_date.strftime("%-m_%-d_%Y") + \
+                            self.forecast_meta_extension
+
+        abs_path = os.path.join(self.archive_dir, 'archive', self.schedule_id.start_date.strftime("%Y_%-m"), relative_filepath)
         if os.path.isfile(abs_path):
             return abs_path
         return None
@@ -532,7 +607,7 @@ class Forecasts(Model):
         """
         if self.name and self.group_id.result_dir:
             for test in self.group_id.evaluation_tests:
-                schedule = ScheduledEvaluations(self.schedule_id.start_date)
+                schedule = ScheduledEvaluations(self.schedule_id.start_date, conn=self.conn)
                 yield Evaluations(schedule, self, self.group_id.result_dir, test, conn=self.conn)
         else:
             return iter([])
@@ -556,7 +631,7 @@ class Evaluations(Model):
         self.forecast_group_archive_dir = archive_dir
         self.relative_filepath = filepath
 
-        self.date = scheduled_id.date_time  # get from scheduled_id
+        self.date = scheduled_id.start_date  # get from scheduled_id
         self.forecast_name = forecast_id.name
         self._list_of_result_files = []
         if self.date and self.forecast_group_archive_dir:
@@ -564,10 +639,13 @@ class Evaluations(Model):
                 self.forecast_group_archive_dir,
                 self.date.strftime("%Y-%m-%d")
             )
-            self._list_of_result_files = os.listdir(self.daily_archive_dir)
+            try:
+                self._list_of_result_files = os.listdir(self.daily_archive_dir)
+            except FileNotFoundError:
+                self.status = 'Missing'
 
             # determine if evaluation exists on server
-            if self.name and self.daily_archive_dir:
+            if self.name and self.daily_archive_dir and self._list_of_result_files:
                 self.filepath = self.determine_full_filepath(regex=self._build_regex())
                 self.meta_filepath = self.determine_meta_filepath(regex=self._build_regex())
 
