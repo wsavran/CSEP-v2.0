@@ -46,6 +46,8 @@ class Model:
             if not value._inserted:
                 # recursive call, will stop when no models have more dependencies
                 value.insert()
+
+            # update dict to store fk of inserted model
             last_insert_id = value.insert_id
             self._insert_values[field] = '"' + str(last_insert_id) + '"'
         else:
@@ -390,8 +392,8 @@ class ForecastGroups(Model):
         generator function to return forecasts associated with a particular forecast group
         :return:
         """
-        for name in self.models:
-            for schedule in self.schedule('forecast'):
+        for schedule in self.schedule('forecast'):
+            for name in self.models:
                 forecast = Forecasts(schedule, self, name, self.forecast_dir, conn=self.conn)
                 yield forecast
 
@@ -598,9 +600,10 @@ class Forecasts(Model):
         generator function to produce evaluations for a given forecast
         :return: evaluation object or empty iterator if none
         """
+        # use the same schedule for all evaluations
+        schedule = ScheduledEvaluations(self.schedule_id.start_date, conn=self.conn)
         if self.name and self.group_id.result_dir:
             for test in self.group_id.evaluation_tests:
-                schedule = ScheduledEvaluations(self.schedule_id.start_date, conn=self.conn)
                 evaluation = Evaluations(schedule, self, self.group_id.result_dir, test, conn=self.conn)
                 yield evaluation
         else:
