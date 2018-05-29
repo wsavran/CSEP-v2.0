@@ -27,21 +27,29 @@ class Model:
         self._insert_values = {}
         self._inserted = False
 
+        # must manually assign columns as unique, store fieldname as string
+        self._unique_columns = []
+
         if self._conn:
             self.table = self.__class__.__name__
             self.fields = self._fields()
 
     def _prepare_insert_values(self, field, value):
-        if isinstance(value, Model) and not self._inserted:
-            # recursive call, will stop when no models have more dependencies
-            value.insert()
+        """
+        puts Model attributed into dict containing values that can be inserted into sqlite3
+        :param field: name of field
+        :param value: value of the field, likely obtained from getattr()
+        :return: none
+        """
+
+        if isinstance(value, Model):
+            if not value._inserted:
+                # recursive call, will stop when no models have more dependencies
+                value.insert()
             last_insert_id = value.insert_id
-            # cast inserts to string type. ok for basic types in database.
-            # could cause problems if api is used incorrectly.
             self._insert_values[field] = '"' + str(last_insert_id) + '"'
         else:
             self._insert_values[field] = '"' + str(value) + '"'
-        return
 
     def insert(self):
         """
@@ -61,7 +69,6 @@ class Model:
             print("Warning: Skipping inserts, no values found.")
             return False
         try:
-            # check if any of the values are model objects
             for field, value in fields_values:
                 self._prepare_insert_values(field, value)
 
@@ -156,47 +163,6 @@ class Model:
                   .format(self.table))
 
 
-class Schedule:
-
-    end_date = datetime(2019, 1, 1, 0, 0, 0)
-
-    def __init__(self, start_date):
-
-        # db fields
-        self.date_time = ''
-
-        self.start_date = start_date  # should be datetime object
-        if self.start_date and isinstance(start_date, datetime):
-            self.date_time = self.datetime_to_text()
-        else:
-            raise AttributeError("start date must be datetime object.")
-
-    def text_to_datetime(self):
-        """
-        convert text in sqlite3 database to python datetime object
-        :param datetime_string: string in format MM-DD-YYYY HH:MM:SS
-        :return: datetime object
-        """
-        return datetime.strptime(self.date_time, '%Y-%m-%d %H:%M:%S')
-
-    def datetime_to_text(self):
-        """
-        covert python3 datetime object to text string to store in sqlite3 database
-        :param datetime_object: python3 datetime object
-        :return: string containing datetime in format MM-DD-YYYY HH:MM:SS
-        """
-        return str(self.start_date)
-
-    def date_range(self, days=1, months=0, years=0):
-        date = self.start_date
-        if date:
-            while date < self.end_date:
-                yield date
-                date += relativedelta(days=days, months=months, years=years)
-        else:
-            return iter([])
-
-
 class ScheduledForecasts(Model):
     end_date = datetime(2019, 1, 1, 0, 0, 0)
 
@@ -205,6 +171,7 @@ class ScheduledForecasts(Model):
 
         # db fields
         self.date_time = ''
+        self._unique_columns.append('date_time')
 
         self.start_date = start_date  # should be datetime object
         if self.start_date and isinstance(start_date, datetime):
@@ -215,7 +182,6 @@ class ScheduledForecasts(Model):
     def text_to_datetime(self):
         """
         convert text in sqlite3 database to python datetime object
-        :param datetime_string: string in format MM-DD-YYYY HH:MM:SS
         :return: datetime object
         """
         return datetime.strptime(self.date_time, '%Y-%m-%d %H:%M:%S')
@@ -223,12 +189,18 @@ class ScheduledForecasts(Model):
     def datetime_to_text(self):
         """
         covert python3 datetime object to text string to store in sqlite3 database
-        :param datetime_object: python3 datetime object
         :return: string containing datetime in format MM-DD-YYYY HH:MM:SS
         """
         return str(self.start_date)
 
     def date_range(self, days=1, months=0, years=0):
+        """
+        generator to generate a list of datetime object having different intervals
+        :param days: interval in days
+        :param months: interval in months
+        :param years: interval in years
+        :return: (iter) datetime objects with day increment
+        """
         date = self.start_date
         if date:
             while date < self.end_date:
@@ -246,6 +218,7 @@ class ScheduledEvaluations(Model):
 
         # db fields
         self.date_time = ''
+        self._unique_columns.append('date_time')
 
         self.start_date = start_date  # should be datetime object
         if self.start_date and isinstance(start_date, datetime):
@@ -268,6 +241,22 @@ class ScheduledEvaluations(Model):
         :return: string containing datetime in format MM-DD-YYYY HH:MM:SS
         """
         return str(self.start_date)
+
+    def date_range(self, days=1, months=0, years=0):
+        date = self.start_date
+        if date:
+            while date < self.end_date:
+                yield date
+                date += relativedelta(days=days, months=months, years=years)
+        else:
+            return iter([])
+
+
+class Schedule:
+    end_date = datetime(2019, 1, 1, 0, 0, 0)
+
+    def __init__(self, start_date=None):
+        self.start_date = start_date
 
     def date_range(self, days=1, months=0, years=0):
         date = self.start_date
@@ -300,7 +289,8 @@ class Dispatchers(Model):
 
     def forecast_groups(self):
         for group_path in self.group_paths():
-            yield ForecastGroups(group_path, self, conn=self.conn)
+            forecast_group = ForecastGroups(group_path, self, conn=self.conn)
+            yield forecast_group
 
     def group_paths(self):
         for group in self.forecast_group_paths:
@@ -388,9 +378,10 @@ class ForecastGroups(Model):
             s = Schedule(self.entry_date)
             for date in s.date_range():
                 if schedule_type == 'forecast':
-                    yield ScheduledForecasts(date, conn=self.conn)
+                    schedule = ScheduledForecasts(date, conn=self.conn)
                 elif schedule_type == 'evaluation':
-                    yield ScheduledEvaluations(date, conn=self.conn)
+                    schedule = ScheduledEvaluations(date, conn=self.conn)
+                yield schedule
         else:
             return iter([])
 
@@ -401,7 +392,8 @@ class ForecastGroups(Model):
         """
         for name in self.models:
             for schedule in self.schedule('forecast'):
-                yield Forecasts(schedule, self, name, self.forecast_dir, conn=self.conn)
+                forecast = Forecasts(schedule, self, name, self.forecast_dir, conn=self.conn)
+                yield forecast
 
     def evaluations(self):
         """
@@ -414,8 +406,9 @@ class ForecastGroups(Model):
             return iter([])
         for schedule in self.schedule('evaluation'):
             for test in self.evaluation_tests:
-                for forecast in self.forecasts:
-                    yield Evaluations(schedule, forecast, self.result_dir, test, conn=self.conn)
+                for forecast in self.forecasts():
+                    evaluation = Evaluations(schedule, forecast, self.result_dir, test, conn=self.conn)
+                    yield evaluation
 
     def parse_forecast_dir(self):
         """
@@ -554,11 +547,11 @@ class Forecasts(Model):
         self.filepath = self.get_filename()
         self.meta_filepath = self.get_metafilename()
 
+        # look for filename on system
         if self.filepath:
-            if os.path.isfile(self.filepath):
-                self.status = "Complete"
-            else:
-                self.status = "Missing"
+            self.status = "Complete"
+        else:
+            self.status = "Missing"
 
         if self.meta_filepath:
             self.waiting_period = self.parse_with_regex(r'--waitingPeriod=(\S*)')
@@ -608,7 +601,8 @@ class Forecasts(Model):
         if self.name and self.group_id.result_dir:
             for test in self.group_id.evaluation_tests:
                 schedule = ScheduledEvaluations(self.schedule_id.start_date, conn=self.conn)
-                yield Evaluations(schedule, self, self.group_id.result_dir, test, conn=self.conn)
+                evaluation = Evaluations(schedule, self, self.group_id.result_dir, test, conn=self.conn)
+                yield evaluation
         else:
             return iter([])
 
@@ -625,6 +619,9 @@ class Evaluations(Model):
         self.filepath = filepath
         self.status = status
         self.compute_datetime = compute_datetime
+
+        # set unique fields
+        self._unique_columns.append(self.filepath)
 
         self.daily_archive_dir = None
         self.meta_filepath = None

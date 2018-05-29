@@ -87,6 +87,9 @@ class TestInsert(unittest.TestCase):
 
         self.assertListEqual(result, test_result)
 
+    def test_insert_with_unique_id(self):
+        """ tests whether a unique key is properly interpreted by the Model class and its children. """
+
     def test_last_insert_id(self):
         """tests whether the last insert id is properly bound to the class after insert() is called
         and before save is called. this will be tested on a class with no foreign keys."""
@@ -145,7 +148,7 @@ class TestInsert(unittest.TestCase):
         self.assertListEqual(result, test_result)
 
     def test_insert_with_dual_depth_foreign_key(self):
-        """tests whether a model with simple foreign key relationship is correctly inserted into the database"""
+        """tests whether a model with nested foreign key relationship is correctly inserted into the database"""
 
         db = sqlite3.connect('test_db')
         cursor = db.cursor()
@@ -183,11 +186,9 @@ class TestInsert(unittest.TestCase):
 
         result = list(cursor.fetchone())
 
-        # rowid=2 for catalog because the db schema defines the catalog to be inserted before the forecast, otherwise
-        # it would have rowid=1. catalog_id=2 in Forecasts for this same reason
         test_result = [1, '5-23-2018 12:00:00', 'test_evaluation_filepath', 1, 1,
-                       1, 'test_forecast', 2,
-                       2, 'test_catalog_filename', '5-23-2018 12:00:00', 'unknown']
+                       1, 'test_forecast', 1,
+                       1, 'test_catalog_filename', '5-23-2018 12:00:00', 'unknown']
 
         self.assertListEqual(result, test_result)
 
