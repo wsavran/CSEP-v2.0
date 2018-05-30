@@ -41,8 +41,21 @@ class Model:
         :param value: value of the field, likely obtained from getattr()
         :return: none
         """
-
+        # only enforcing unique values for foreign keys.
+        # logic being, that we dont want to duplicate rows in fk tables, but if the system finds, for example, a
+        # forecast model that has the same file path existing in two forecast groups we'd want that duplicated
         if isinstance(value, Model):
+            for unique_field in value._unique_columns:
+                if not value._inserted:
+                    # check if row containing unique column exists in database
+                    cursor = value._conn.cursor()
+                    cursor.execute('select rowid from {} where {}=?;'.format(value.table, unique_field),
+                                   (getattr(value, unique_field),))
+                    result = cursor.fetchone()
+                    if result:
+                        value._inserted = True
+                        value._insert_id = int(result[0])
+
             if not value._inserted:
                 # recursive call, will stop when no models have more dependencies
                 value.insert()

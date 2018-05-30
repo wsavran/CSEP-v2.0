@@ -90,6 +90,51 @@ class TestInsert(unittest.TestCase):
     def test_insert_with_unique_id(self):
         """ tests whether a unique key is properly interpreted by the Model class and its children. """
 
+        db = sqlite3.connect('test_db')
+        cursor = db.cursor()
+
+        class Forecasts(Model):
+            def __init__(self, catalog_id=None, **kwargs):
+                super().__init__(**kwargs)
+                self.name = 'test_forecast'
+                self.catalog_id = catalog_id
+
+        class Catalogs(Model):
+            def __init__(self, **kwargs):
+                super().__init__(**kwargs)
+                self.data_filename = 'test_catalog_filename'
+                self.creation_date = '5-23-2018 12:00:00'
+                self.post_processing = 'unknown'
+
+                self._unique_columns.append('creation_date')
+
+        c = Catalogs(conn=db)  # instance 1 of catalogs with same values
+        c2 = Catalogs(conn=db)  # instance 2 of catalogs with duplicate unique value
+        f = Forecasts(catalog_id=c, conn=db)
+        f2 = Forecasts(catalog_id=c2, conn=db)
+
+        # insert into database with instance one of catalogs
+        f.insert()
+        f.save()
+
+        # insert into database with instance two of catalogs
+        f2.insert()
+        f2.save()
+
+        cursor.execute('select count(rowid) from Catalogs;')
+        result = cursor.fetchone()[0]
+
+        # there should only be 1 catalog entry in database
+        self.assertEqual(result, 1)
+
+        cursor.execute('select * from Forecasts join Catalogs on Forecasts.catalog_id=Catalogs.catalog_id')
+        result = cursor.fetchall()
+
+        test_result = [(1, 'test_forecast', 1, 1, 'test_catalog_filename', '5-23-2018 12:00:00', 'unknown'),
+                       (2, 'test_forecast', 1, 1, 'test_catalog_filename', '5-23-2018 12:00:00', 'unknown')]
+
+        self.assertListEqual(result, test_result)
+
     def test_last_insert_id(self):
         """tests whether the last insert id is properly bound to the class after insert() is called
         and before save is called. this will be tested on a class with no foreign keys."""
@@ -111,8 +156,9 @@ class TestInsert(unittest.TestCase):
 
         # generate query to obtain values
         cursor.execute('select catalog_id from Catalogs')
+        result = cursor.fetchone()[0]
 
-        self.assertEqual(1, c.insert_id)
+        self.assertEqual(result, c.insert_id)
 
     def test_insert_with_single_depth_foreign_key(self):
         """tests whether a model with simple foreign key relationship is correctly inserted into the database"""
