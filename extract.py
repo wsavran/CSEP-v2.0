@@ -20,5 +20,5 @@ for group in dispatcher.forecast_groups():
         for evaluation in forecast.evaluations():
             evaluation.insert()
 
-# commit insertions to database
 db.commit()
+

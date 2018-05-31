@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS Forecasts (
     group_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     filepath TEXT,
+    meta_filepath TEXT,
     waiting_period TEXT,
     logfile TEXT,
     status TEXT,

@@ -208,22 +208,6 @@ class ScheduledForecasts(Model):
         """
         return str(self.start_date)
 
-    def date_range(self, days=1, months=0, years=0):
-        """
-        generator to generate a list of datetime object having different intervals
-        :param days: interval in days
-        :param months: interval in months
-        :param years: interval in years
-        :return: (iter) datetime objects with day increment
-        """
-        date = self.start_date
-        if date:
-            while date < self.end_date:
-                yield date
-                date += relativedelta(days=days, months=months, years=years)
-        else:
-            return iter([])
-
 
 class ScheduledEvaluations(Model):
     end_date = datetime(2019, 1, 1, 0, 0, 0)
@@ -256,15 +240,6 @@ class ScheduledEvaluations(Model):
         :return: string containing datetime in format MM-DD-YYYY HH:MM:SS
         """
         return str(self.start_date)
-
-    def date_range(self, days=1, months=0, years=0):
-        date = self.start_date
-        if date:
-            while date < self.end_date:
-                yield date
-                date += relativedelta(days=days, months=months, years=years)
-        else:
-            return iter([])
 
 
 class Schedule:
@@ -539,10 +514,10 @@ class ForecastGroups(Model):
 
 class Forecasts(Model):
     forecast_extension = '.xml'
-    forecast_meta_extension = 'xml.meta'
+    forecast_meta_extension = '.xml.meta'
 
     def __init__(self, schedule_id, group_id, name, archive_dir,
-                 filepath=None, runtime_testdate=None, waiting_period=None, logfile=None, status=None,
+                 filepath=None, meta_filepath=None, runtime_testdate=None, waiting_period=None, logfile=None, status=None,
                  **kwargs):
         super().__init__(**kwargs)
 
@@ -550,11 +525,15 @@ class Forecasts(Model):
         self.schedule_id = schedule_id
         self.group_id = group_id
         self.filepath = filepath
+        self.meta_filepath = meta_filepath
         self.name = name
         self.logfile = logfile
         self.status = status
         self.waiting_period = waiting_period
         self.runtime_testdate = runtime_testdate
+
+        # unique columns
+        self._unique_columns.append('filepath')
 
         # should be passed in from forecast group generator
         self.archive_dir = archive_dir
@@ -563,22 +542,30 @@ class Forecasts(Model):
         self.meta_filepath = self.get_metafilename()
 
         # look for filename on system
-        if self.filepath:
+        if os.path.isfile(self.filepath):
             self.status = "Complete"
         else:
             self.status = "Missing"
 
         if self.meta_filepath:
-            self.waiting_period = self.parse_with_regex(r'--waitingPeriod=(\S*)')
-            self.runtime_testdate = self.parse_with_regex(r'--runtimeTestDate=(\S*)')
-            self.logfile = self.parse_with_regex(r'--logFile=(\S*)')
+            self.waiting_period = self.parse_with_regex(r"--waitingPeriod=(\S*)'")
+            self.runtime_testdate = self.parse_with_regex(r"--runtimeTestDate=(\S*)'")
+            self.logfile = self.parse_with_regex(r"--logFile=(\S*)'")
 
     def parse_with_regex(self, regex_string):
         p = re.compile(regex_string)
-        with open(self.meta_filepath, 'r') as f:
-            lines = f.readlines()
-        para = ''.join(lines).strip()
-        return p.search(para).group(1)
+        try:
+            with open(self.meta_filepath, 'r') as f:
+                lines = f.readlines()
+            para = ''.join(lines).strip()
+            result = p.search(para)
+            # returns result or None
+            if result:
+                return result.group(1)
+            else:
+                return result
+        except FileNotFoundError:
+            return None
 
     def get_filename(self):
         """
@@ -586,12 +573,12 @@ class Forecasts(Model):
         template -- <model_name>_<month>_<day>_<year>.xml
         :return: filename if found, None if not found
         """
-        relative_filepath = self.name + '_' + self.schedule_id.start_date.strftime("%-m_%-d_%Y") + self.forecast_extension
+        relative_filepath = self.name + '_' + \
+            self.schedule_id.start_date.strftime("%-m_%-d_%Y") + \
+            self.forecast_extension
         archive_subdir = self.schedule_id.start_date.strftime("%Y_%-m")
         abs_path = os.path.join(self.archive_dir, 'archive', archive_subdir, relative_filepath)
-        if os.path.isfile(abs_path):
-            return abs_path
-        return None
+        return abs_path
 
     def get_metafilename(self):
         """
@@ -600,13 +587,11 @@ class Forecasts(Model):
         :return: filename if found, None if not found
         """
         relative_filepath = self.name + '_' + \
-                            self.schedule_id.start_date.strftime("%-m_%-d_%Y") + \
-                            self.forecast_meta_extension
-
-        abs_path = os.path.join(self.archive_dir, 'archive', self.schedule_id.start_date.strftime("%Y_%-m"), relative_filepath)
-        if os.path.isfile(abs_path):
-            return abs_path
-        return None
+            self.schedule_id.start_date.strftime("%-m_%-d_%Y") + \
+            self.forecast_meta_extension
+        archive_subdir = self.schedule_id.start_date.strftime("%Y_%-m")
+        abs_path = os.path.join(self.archive_dir, 'archive', archive_subdir, relative_filepath)
+        return abs_path
 
     def evaluations(self):
         """
