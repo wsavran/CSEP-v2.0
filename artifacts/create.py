@@ -1,18 +1,12 @@
 import os, sys
 import sqlite3
-import json
-import datetime
-
-# script variables
-db_name = 'csep_db'
-debug = True
 
 
 def create_schema(filename=None, db_filename=None):
     """
     creates sqlite3 database from text file containing SQL CREATE statements
     :param filename: path to text file containing SQL statements
-    :param db_name: path to the sqlite3 database
+    :param db_filename: path to the sqlite3 database
     :return: none
     """
 
@@ -25,7 +19,7 @@ def create_schema(filename=None, db_filename=None):
         sys.exit(-1)
 
     # creates new db if it does not exist, and calls cursor object
-    db = sqlite3.connect(db_name)
+    db = sqlite3.connect(db_filename)
 
     try:
         # use 'with' to cleanly close file
@@ -50,18 +44,7 @@ def create_schema(filename=None, db_filename=None):
             raise
         sys.exit(-1)
 
-    return
+    db.commit()
 
-
-if __name__ == "__main__":
-    # make database
-    create_schema("./artifacts/table_schema.txt", db_name)
-
-
-
-
-
-
-
-
+    return db
 

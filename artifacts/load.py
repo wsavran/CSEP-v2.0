@@ -18,12 +18,11 @@ def _get_fields(cursor, table_name):
     except sqlite3.OperationalError:
         print("error: table {} does not exist in database".format(table_name))
         return []
-
     names = [f[0] for f in cursor.description]
     return names
 
 
-def _insert(cursor, table, fields, values):
+def insert(cursor, table, fields, values):
     num = len(values)
     if num == 0:
         print("Warning: Skipping inserts, no values found.")
@@ -41,7 +40,7 @@ def _insert_from_csv(filename, cursor, table, fields):
         reader = csv.reader(f)
         for row in reader:
             quote_row = ['"' + item + '"' for item in row[1:]]
-            if not _insert(cursor, table, fields, ', '.join(quote_row)):
+            if not insert(cursor, table, fields, ', '.join(quote_row)):
                 return False
     return True
 
@@ -69,15 +68,15 @@ def load_data(db_path, tables, join_tables=[]):
 if __name__ == "__main__":
     db_path = './csep_db'
     # mapping from table name => data file
-    tables = {'ScheduledForecasts': './artifacts/testing_data/scheduled_forecasts.csv',
-              'ScheduledEvaluations': './artifacts/testing_data/scheduled_evaluations.csv',
-              'Dispatchers': './artifacts/testing_data/dispatchers.csv',
-              'ForecastGroups': './artifacts/testing_data/forecast_groups.csv',
-              'EvaluationTypes': './artifacts/testing_data/evaluation_types.csv',
-              'Evaluations': './artifacts/testing_data/evaluations.csv',
-              'Forecasts': './artifacts/testing_data/forecasts.csv',
-              'Catalogs': './artifacts/testing_data/catalogs.csv',
-              'Dispatchers_ForecastGroups': './artifacts/testing_data/dispatchers_forecastgroups.csv'}
+    tables = {'ScheduledForecasts': './testing_data/scheduled_forecasts.csv',
+              'ScheduledEvaluations': './testing_data/scheduled_evaluations.csv',
+              'Dispatchers': './testing_data/dispatchers.csv',
+              'ForecastGroups': './testing_data/forecast_groups.csv',
+              'EvaluationTypes': './testing_data/evaluation_types.csv',
+              'Evaluations': './testing_data/evaluations.csv',
+              'Forecasts': './testing_data/forecasts.csv',
+              'Catalogs': './testing_data/catalogs.csv',
+              'Dispatchers_ForecastGroups': './testing_data/dispatchers_forecastgroups.csv'}
     join_tables = ['Dispatchers_ForecastGroups']
     load_data(db_path, tables, join_tables)
 
