@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS Dispatchers (
 CREATE TABLE IF NOT EXISTS ForecastGroups (
     forecastgroup_id INTEGER PRIMARY KEY,
     group_name TEXT NOT NULL,
+    group_path TEXT NOT NULL,
+    group_description TEXT,
     config_filepath TEXT NOT NULL,
     dispatcher_id INTEGER NOT NULL,
     FOREIGN KEY(dispatcher_id) REFERENCES Dispatchers
