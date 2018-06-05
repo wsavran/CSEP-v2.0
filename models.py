@@ -316,7 +316,7 @@ class ForecastGroups(Model):
     end_date = Schedule.end_date
 
     def __init__(self, group_path, dispatcher_id,
-                 config_filepath=None, group_name=None, **kwargs):
+                 config_filepath=None, group_name=None, group_description=None, **kwargs):
         super().__init__(**kwargs)
         self.entry_date = None
         self.result_dir = None
@@ -329,15 +329,17 @@ class ForecastGroups(Model):
         self.post_processing = None
         self.entry_date = None
         self.models = []
-        self.group_path = group_path
 
         # database fields
+        self.group_path = group_path
         self.group_name = group_name
+        self.group_description = group_description
         self.config_filepath = config_filepath
         self.dispatcher_id = dispatcher_id
 
         if group_path:
             self.fg = ForecastGroupInitFile(self.group_path)
+            self.group_description = self.parse_group_description()
             self.group_name = self.parse_group_name()
             self.config_filepath = os.path.join(self.group_path, 'forecast.init.xml')
             self.models = self.parse_models()
@@ -431,7 +433,7 @@ class ForecastGroups(Model):
         """
         return self.fg.elementValue('postProcessing')
 
-    def parse_group_name(self):
+    def parse_group_description(self):
         """
         parses and sets the group name, fails loudly
         :param group_path: path of the top level folder to the forecast group
@@ -440,6 +442,16 @@ class ForecastGroups(Model):
         # name is stored as attribute on root
         root = self.fg.root()
         name = root.attrib['name']
+        return name
+
+    def parse_group_name(self):
+        """
+        parses group name from group path string. name is assumed to be the basename of the path
+        eg.) for group_path /home/csep/operations/SCEC-natural-laboratory/one-day-models-V9.1 the
+        group_name is one-day-models-V9.1
+        :return:
+        """
+        name = os.path.basename(self.group_path)
         return name
 
     def parse_models(self):
