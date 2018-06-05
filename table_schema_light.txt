@@ -47,5 +47,6 @@ CREATE TABLE IF NOT EXISTS Evaluations (
     name TEXT,
     status TEXT,
     FOREIGN KEY(scheduled_id) REFERENCES ScheduledEvaluations,
-    FOREIGN KEY(forecast_id) REFERENCES Forecasts
+    FOREIGN KEY(forecast_id) REFERENCES Forecasts,
+    UNIQUE(forecast_id, name)
 );

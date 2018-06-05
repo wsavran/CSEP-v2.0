@@ -41,7 +41,7 @@ class Model:
         :param value: value of the field, likely obtained from getattr()
         :return: none
         """
-        # only enforcing unique values for foreign keys.
+        # enforcing unique values for foreign keys.
         # logic being, that we dont want to duplicate rows in fk tables, but if the system finds, for example, a
         # forecast model that has the same file path existing in two forecast groups we'd want that duplicated
         if isinstance(value, Model):
@@ -92,7 +92,7 @@ class Model:
             values = ', '.join(values)
 
             cursor = self.conn.cursor()
-            cursor.execute("INSERT INTO {0} ({1}) VALUES ({2})".format(self.table, fields, values))
+            cursor.execute("INSERT OR IGNORE INTO {0} ({1}) VALUES ({2})".format(self.table, fields, values))
 
             # update insert id for fk purposes
             self._insert_id = cursor.lastrowid
