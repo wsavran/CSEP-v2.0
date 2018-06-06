@@ -673,7 +673,7 @@ class Evaluations(Model):
         year = self.date.strftime("%Y")
         month = self.date.strftime("%-m")
         day = self.date.strftime("%-d")
-        p = re.compile(r"^scec\.csep\S*{}-Test_{}_{}_{}_{}-fromXML.xml"
+        p = re.compile(r"^\S*{}-Test_{}_{}_{}_{}-fromXML.xml"
                        .format(self.name, self.forecast_name, month, day, year))
         return p
 
