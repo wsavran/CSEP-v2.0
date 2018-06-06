@@ -5,11 +5,17 @@
 * [fixed] not parsing forecast meta data correctly
 * [fixed] when forecast is present in multiple forecast groups, evaluations are incorrectly expected from each forecast group.
 * [fixed] missing evaluations having different regex
-* forecast names not being properly created if inputs present
-* certain forecasts not expected based on forecast group information, eg, ETASPPE
+* forecast names not being properly created if inputs present, eg, ETAS_HWMd3 vs ETAS_HW as listed in forecast group config
+* certain forecasts present but not expected based on forecast group information, eg, ETAS_DROneDayPPE is hard-coded into the model implementation in CSEP. exists as ETAS_DROneDayPPE and ETAS_DROneDay on server.
+* evaluations linking to external forecast groups not being attributed to forecasts introduced in previous forecast groups, eg., additional evaluations in one-day-models-V16.4 group
+* forecasts incorrectly labeled as missing when filename suffix is not correct eg., -fromXML.xml instead of .xml
 
 ### features:
 * [done] added tests for model base class
 * [done] add forecast group name to schema
+
+### propsed changes:
+* incorporate list of models based on files tag in forecast group init file, and supplement missing models.
+* introduce concept of model producing forecast, but how to populate without a priori information?
 
 
