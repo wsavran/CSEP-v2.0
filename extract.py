@@ -10,7 +10,7 @@ try:
 except FileNotFoundError:
     pass
 
-sql_statements = './table_schema_light.txt'
+sql_statements = 'db_schema.sql'
 db = create_schema(sql_statements, db_name)
 
 # start with ANSS one-day catalogs
