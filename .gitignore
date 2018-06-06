@@ -1,6 +1,7 @@
 # Project Specifics
 csep_db
 *.sql3 
+notes.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
