@@ -315,7 +315,7 @@ class ForecastGroups(Model):
     bayesianModel = 'BayesianModel'
     end_date = Schedule.end_date
 
-    def __init__(self, group_path, dispatcher_id,
+    def __init__(self, group_path, dispatcher_id=None,
                  config_filepath=None, group_name=None, group_description=None, **kwargs):
         super().__init__(**kwargs)
         self.entry_date = None
@@ -329,6 +329,7 @@ class ForecastGroups(Model):
         self.post_processing = None
         self.entry_date = None
         self.models = []
+        self.expected_forecasts = []
 
         # database fields
         self.group_path = group_path
@@ -343,6 +344,7 @@ class ForecastGroups(Model):
             self.group_name = self.parse_group_name()
             self.config_filepath = os.path.join(self.group_path, 'forecast.init.xml')
             self.models = self.parse_models()
+            self.expected_forecasts = self.parse_expected_forecasts()
             self.evaluation_schedule = self.parse_schedule('evaluationTests')
             self.forecast_schedule = self.parse_schedule('models')
             self.group_dir = os.path.basename(self.group_path)
@@ -383,7 +385,7 @@ class ForecastGroups(Model):
         :return:
         """
         for schedule in self.schedule('forecast'):
-            for name in self.models:
+            for name in self.expected_forecasts:
                 forecast = Forecasts(schedule, self, name, self.forecast_dir, conn=self.conn)
                 yield forecast
 
@@ -474,6 +476,52 @@ class ForecastGroups(Model):
                   .format(self.group_path))
         return models
 
+    def parse_expected_forecasts(self, predict_missing=True):
+        """
+        forecasts do not map 1 to 1 to models in CSEP. the expected filename of some forecasts may
+        not directly correlate to the list of models and multiple forecasts may be produced by the
+        same model, eg., ETAS_DROneDay -> [ETAS_DROneDayMd3, ETAS_DROneDayPPEMd3]
+
+        CSEP prints a list of expected models under the models tag using the file attribute. if models
+        run successfully, they will be listed here. we expect that there could be more forecasts than
+        models, but not more models than forecasts. based on this rationale, the expected forecasts
+        will be first parsed from the configuration file. the basename of the forecast will be stripped
+        and combined with the forecast date and all possible suffixes before considering the model
+        is missing. furthermore, if there are models listed under the models tag that are not present
+        in files tag, they will be assigned a default filename. this could cause issues with models
+        that produce multiple forecasts, but there is no way to tell a priori which models are expected.
+
+        if this code were to be generalized for all testing centers, a better solution would be to
+        introduce the relationship between models and forecasts and have that defined by the
+        testing center manager. this solution would provide additional information such as author names
+        and contact information. if not added in csep1, it should most definitely be included in the
+        new system.
+
+        :return:
+        """
+        # part 1: grab forecasts from files attribute
+        expected_forecasts = []
+        model_tags = self.fg.elements(self.genericModel)
+        for model in model_tags:
+            try:
+                files = model.attrib['files'].split(' ')
+            except KeyError:
+                return []
+            if files:
+                found_files = list(map(lambda x: '_'.join(x.split('_')[0:-3]), files))
+            expected_forecasts.extend(found_files)
+
+        # part 2: look for model substring in remaining found forecasts
+        # if not found, add to expected list
+        if predict_missing:
+            forecast_straglers = list(set(found_files) - set(self.models))
+            model_straglers = list(set(self.models) - set(found_files))
+            for model in model_straglers:
+                if not any(model in fc for fc in forecast_straglers):
+                    expected_forecasts.append(model)
+
+        return expected_forecasts
+
     def parse_evaluation_tests(self, xml_elem=None):
         """
         either parses entire configuration file, or tests from single element.
@@ -525,6 +573,7 @@ class ForecastGroups(Model):
 
 
 class Forecasts(Model):
+    # forecast_extensions = ['.xml','-fromXML.xml']
     forecast_extension = '.xml'
     forecast_meta_extension = '.xml.meta'
 
