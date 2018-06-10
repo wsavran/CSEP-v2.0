@@ -1,16 +1,16 @@
 CREATE TABLE IF NOT EXISTS ScheduledForecasts (
     scheduled_forecast_id INTEGER PRIMARY KEY,
-    date_time TEXT NOT NULL
+    date_time TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS ScheduledEvaluations (
     scheduled_evaluation_id INTEGER PRIMARY KEY,
-    date_time TEXT NOT NULL
+    date_time TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS Dispatchers (
     dispatcher_id INTEGER PRIMARY KEY,
-    script_name TEXT NOT NULL,
+    script_name TEXT NOT NULL UNIQUE,
     config_file_name TEXT NOT NULL
 );
 
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS Forecasts (
     schedule_id INTEGER NOT NULL,
     group_id INTEGER NOT NULL,
     name TEXT NOT NULL,
-    filepath TEXT,
+    filepath TEXT UNIQUE,
     meta_filepath TEXT,
     waiting_period TEXT,
     logfile TEXT,

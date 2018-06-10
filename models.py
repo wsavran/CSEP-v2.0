@@ -111,8 +111,6 @@ class Model:
         """
         if self._inserted:
             self.conn.commit()
-        else:
-            raise RuntimeError("Error: cannot save the same database model twice.")
 
     @property
     def insert_id(self):
@@ -476,7 +474,7 @@ class ForecastGroups(Model):
                   .format(self.group_path))
         return models
 
-    def parse_expected_forecasts(self, predict_missing=True):
+    def parse_expected_forecasts(self, predict_missing=False):
         """
         forecasts do not map 1 to 1 to models in CSEP. the expected filename of some forecasts may
         not directly correlate to the list of models and multiple forecasts may be produced by the
@@ -497,7 +495,10 @@ class ForecastGroups(Model):
         and contact information. if not added in csep1, it should most definitely be included in the
         new system.
 
-        :return:
+        :param predict_missing [bool] if true, try and determine which forecasts are expected
+        based on the model tags
+
+        :return: expected_forecasts [list] list of expected forecasts
         """
         # part 1: grab forecasts from files attribute
         expected_forecasts = []
@@ -508,6 +509,7 @@ class ForecastGroups(Model):
             except KeyError:
                 return []
             if files:
+                # hardcoded to reflect CSEP filenames
                 found_files = list(map(lambda x: '_'.join(x.split('_')[0:-3]), files))
             expected_forecasts.extend(found_files)
 
@@ -573,9 +575,7 @@ class ForecastGroups(Model):
 
 
 class Forecasts(Model):
-    # forecast_extensions = ['.xml','-fromXML.xml']
-    forecast_extension = '.xml'
-    forecast_meta_extension = '.xml.meta'
+    forecast_extensions = ['.xml', '-fromXML.xml', '.dat', '-fromXML.dat', '-fromXML.dat.targz']
 
     def __init__(self, schedule_id, group_id, name, archive_dir,
                  filepath=None, meta_filepath=None, runtime_testdate=None, waiting_period=None, logfile=None, status=None,
@@ -599,14 +599,18 @@ class Forecasts(Model):
         # should be passed in from forecast group generator
         self.archive_dir = archive_dir
 
-        self.filepath = self.get_filename()
-        self.meta_filepath = self.get_metafilename()
+        # default found extension
+        self._filepaths = self.get_filenames()
 
         # look for filename on system
-        if os.path.isfile(self.filepath):
-            self.status = "Complete"
-        else:
-            self.status = "Missing"
+        self.status = 'Missing'
+        found = False
+        while not found and self._filepaths:
+            self.filepath = self._filepaths.pop()
+            if os.path.isfile(self.filepath):
+                self.status = 'Complete'
+                self.meta_filepath = self.filepath + '.meta'
+                found = True
 
         if self.meta_filepath:
             self.waiting_period = self.parse_with_regex(r"--waitingPeriod=(\S*)'")
@@ -628,31 +632,20 @@ class Forecasts(Model):
         except FileNotFoundError:
             return None
 
-    def get_filename(self):
+    def get_filenames(self):
         """
         filename for a forecast file
         template -- <model_name>_<month>_<day>_<year>.xml
         :return: filename if found, None if not found
         """
-        relative_filepath = self.name + '_' + \
-            self.schedule_id.start_date.strftime("%-m_%-d_%Y") + \
-            self.forecast_extension
+        filepaths = []
         archive_subdir = self.schedule_id.start_date.strftime("%Y_%-m")
-        abs_path = os.path.join(self.archive_dir, 'archive', archive_subdir, relative_filepath)
-        return abs_path
-
-    def get_metafilename(self):
-        """
-        filename for a forecast metadata file
-        template -- <model_name>_<month>_<day>_<year>.xml
-        :return: filename if found, None if not found
-        """
-        relative_filepath = self.name + '_' + \
-            self.schedule_id.start_date.strftime("%-m_%-d_%Y") + \
-            self.forecast_meta_extension
-        archive_subdir = self.schedule_id.start_date.strftime("%Y_%-m")
-        abs_path = os.path.join(self.archive_dir, 'archive', archive_subdir, relative_filepath)
-        return abs_path
+        for ext in self.forecast_extensions:
+            relative_filepath = self.name + '_' + \
+            self.schedule_id.start_date.strftime("%-m_%-d_%Y") + ext
+            abs_path = os.path.join(self.archive_dir, 'archive', archive_subdir, relative_filepath)
+            filepaths.append(abs_path)
+        return filepaths
 
     def evaluations(self):
         """
