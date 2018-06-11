@@ -635,7 +635,7 @@ class Forecasts(Model):
             self.logfile = self.parse_with_regex(r"--logFile=(\S*)'")
 
         # assign forecasts as scheduled if greater than todays date
-        if group_id.dispatcher_id:
+        if group_id.dispatcher_id and not self.waiting_period:
             self.waiting_period = group_id.dispatcher_id.waiting_period
         forecast_date = schedule_id.start_date
         current_date = datetime.today() - timedelta(days=self.waiting_period)
