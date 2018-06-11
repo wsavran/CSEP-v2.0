@@ -1,7 +1,7 @@
 import os
 import re
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from ForecastGroupInitFile import ForecastGroupInitFile
 from DispatcherInitFile import DispatcherInitFile
@@ -258,15 +258,19 @@ class Schedule:
 
 class Dispatchers(Model):
 
-    def __init__(self, script_name, config_file_name=None, **kwargs):
+    def __init__(self, script_name, config_file_name=None, waiting_period=None, **kwargs):
         super().__init__(**kwargs)
+        self.forecast_group_paths = []
+
+        # db fields
         self.script_name = script_name
         self.config_file_name = config_file_name
-        self.forecast_group_paths = []
+        self.waiting_period = waiting_period
 
         # populate db fields
         if self.script_name:
             self.config_file_name = self.parse_config_file()
+            self.waiting_period = self.parse_waiting_period()
         else:
             raise AttributeError("script name cannot be none.")
 
@@ -294,6 +298,18 @@ class Dispatchers(Model):
             return p.search(para).group(1)
         except AttributeError:
             print('Warning: Could not parse config file name from dispatcher script')
+            return None
+
+    def parse_waiting_period(self):
+        p = re.compile(r'waitingPeriod=(\S*)')
+        with open(self.script_name, 'r') as f:
+            lines = f.readlines()
+        para = ''.join(lines).strip()
+        try:
+            # should be regex capture group 1
+            return int(p.search(para).group(1))
+        except AttributeError:
+            print('Warning: Could not parse waiting period from dispatcher script')
             return None
 
     def parse_forecastgroup_path(self):
@@ -502,6 +518,7 @@ class ForecastGroups(Model):
         """
         # part 1: grab forecasts from files attribute
         expected_forecasts = []
+        found_files = []
         model_tags = self.fg.elements(self.genericModel)
         for model in model_tags:
             try:
@@ -617,6 +634,14 @@ class Forecasts(Model):
             self.runtime_testdate = self.parse_with_regex(r"--runtimeTestDate=(\S*)'")
             self.logfile = self.parse_with_regex(r"--logFile=(\S*)'")
 
+        # assign forecasts as scheduled if greater than todays date
+        if group_id.dispatcher_id:
+            self.waiting_period = group_id.dispatcher_id.waiting_period
+        forecast_date = schedule_id.start_date
+        current_date = datetime.today() - timedelta(days=self.waiting_period)
+        if self.status == 'Missing' and forecast_date > current_date:
+            self.status = 'Scheduled'
+
     def parse_with_regex(self, regex_string):
         p = re.compile(regex_string)
         try:
@@ -663,12 +688,12 @@ class Forecasts(Model):
 
 
 class Evaluations(Model):
-    def __init__(self, scheduled_id, forecast_id, archive_dir, evaluation_name, filepath='', status='',
+    def __init__(self, schedule_id, forecast_id, archive_dir, evaluation_name, filepath='', status='',
                  compute_datetime='', **kwargs):
         super().__init__(**kwargs)
 
         # database fields
-        self.scheduled_id = scheduled_id
+        self.schedule_id = schedule_id
         self.forecast_id = forecast_id
         self.name = evaluation_name
         self.filepath = filepath
@@ -683,7 +708,7 @@ class Evaluations(Model):
         self.forecast_group_archive_dir = archive_dir
         self.relative_filepath = filepath
 
-        self.date = scheduled_id.start_date  # get from scheduled_id
+        self.date = schedule_id.start_date  # get from schedule_id
         self.forecast_name = forecast_id.name
         self._list_of_result_files = []
         if self.date and self.forecast_group_archive_dir:
@@ -706,6 +731,16 @@ class Evaluations(Model):
                 self.status = "Complete"
             else:
                 self.status = "Missing"
+
+            # assign forecasts as scheduled if greater than today's date
+            # evaluations happen the day after the forecast
+            if forecast_id.waiting_period:
+                waiting_period = forecast_id.waiting_period
+            # FIXME: hard-coded for one-day models, don't ignore
+            evaluation_date = schedule_id.start_date - timedelta(days=waiting_period-1)
+            current_date = datetime.today()
+            if self.status == 'Missing' and evaluation_date > current_date:
+                self.status = 'Scheduled'
 
     def _build_regex(self):
         """
