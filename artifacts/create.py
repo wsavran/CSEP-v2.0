@@ -1,4 +1,4 @@
-import os, sys
+import sys
 import sqlite3
 
 
@@ -21,29 +21,15 @@ def create_schema(filename=None, db_filename=None):
     # creates new db if it does not exist, and calls cursor object
     db = sqlite3.connect(db_filename)
 
-    try:
-        # use 'with' to cleanly close file
-        with open(filename, 'r') as f:
-            lines = f.readlines()
-    except IOError:
-        print("error: could not read file.")
-        if debug:
-            raise
-        sys.exit(-1)
+    # use 'with' to cleanly close file
+    with open(filename, 'r') as f:
+        lines = f.readlines()
 
     # on unix, no windows compatibility not implemented
     statements = ''.join(lines).split('\n\n')
 
-    try:
-        for statement in statements:
-            db.execute(statement)
-    # general error for sqlite3, subclasses Exception
-    except sqlite3.Error:
-        print("error: could not execute sqlite statements.")
-        if debug:
-            raise
-        sys.exit(-1)
-
+    for statement in statements:
+        db.execute(statement)
     db.commit()
 
     return db

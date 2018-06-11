@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS ScheduledEvaluations (
 CREATE TABLE IF NOT EXISTS Dispatchers (
     dispatcher_id INTEGER PRIMARY KEY,
     script_name TEXT NOT NULL UNIQUE,
+    waiting_period TEXT,
     config_file_name TEXT NOT NULL
 );
 
@@ -40,13 +41,13 @@ CREATE TABLE IF NOT EXISTS Forecasts (
 
 CREATE TABLE IF NOT EXISTS Evaluations (
     evaluation_id INTEGER PRIMARY KEY,
-    scheduled_id INTEGER NOT NULL,
+    schedule_id INTEGER NOT NULL,
     forecast_id INTEGER NOT NULL,
     compute_datetime TEXT,
     filepath TEXT,
     name TEXT,
     status TEXT,
-    FOREIGN KEY(scheduled_id) REFERENCES ScheduledEvaluations,
+    FOREIGN KEY(schedule_id) REFERENCES ScheduledEvaluations,
     FOREIGN KEY(forecast_id) REFERENCES Forecasts,
     UNIQUE(forecast_id, name)
 );
