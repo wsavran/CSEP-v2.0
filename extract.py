@@ -4,7 +4,7 @@ from artifacts.create import create_schema
 from models import Dispatchers
 
 # create database
-db_name = 'csep_db_one-day-forecasts_no_evaluations.sql3'
+db_name = 'csep_db_one-day-forecasts_new_algorithm.sql3'
 
 try:
     os.remove(db_name)
