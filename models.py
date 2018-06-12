@@ -496,76 +496,50 @@ class ForecastGroups(Model):
         not directly correlate to the list of models and multiple forecasts may be produced by the
         same model, eg., ETAS_DROneDay -> [ETAS_DROneDayMd3, ETAS_DROneDayPPEMd3]
 
-        CSEP prints a list of expected models under the models tag using the file attribute. if models
-        run successfully, they will be listed here. we expect that there could be more forecasts than
-        models, but not more models than forecasts. based on this rationale, the expected forecasts
-        will be first parsed from the configuration file. the basename of the forecast will be stripped
-        and combined with the forecast date and all possible suffixes before considering the model
-        is missing. furthermore, if there are models listed under the models tag that are not present
-        in files tag, they will be assigned a default filename. this could cause issues with models
-        that produce multiple forecasts, but there is no way to tell a priori which models are expected.
-
-        if this code were to be generalized for all testing centers, a better solution would be to
-        introduce the relationship between models and forecasts and have that defined by the
-        testing center manager. this solution would provide additional information such as author names
-        and contact information. if not added in csep1, it should most definitely be included in the
-        new system.
-
-        :param predict_missing [bool] if true, try and determine which forecasts are expected
-        based on the model tags
+        this algorithm scans the archived forecast directory and extracts the forecast name using
+        regular expressions. The list does not use any a priori information from the forecast group configuration
+        file.
 
         :return: expected_forecasts [list] list of expected forecasts
         """
-        # part 1: grab forecasts from files attribute
-        expected_forecasts = []
-        found_files = []
-        model_tags = self.fg.elements(self.genericModel)
-        for model in model_tags:
+
+        unique_forecasts = {}
+        work_dir = self.forecast_dir
+        for root, dirs, names in os.walk(work_dir):
+            regex = re.compile(r'(\w*)_\d+_\d+_\d+\S*')
             try:
-                files = model.attrib['files'].split(' ')
-            except KeyError:
-                return []
-            if files:
-                # hardcoded to reflect CSEP filenames
-                found_files = list(map(lambda x: '_'.join(x.split('_')[0:-3]), files))
-            expected_forecasts.extend(found_files)
-
-        # part 2: look for model substring in remaining found forecasts
-        # if not found, add to expected list
-        if predict_missing:
-            forecast_straglers = list(set(found_files) - set(self.models))
-            model_straglers = list(set(self.models) - set(found_files))
-            for model in model_straglers:
-                if not any(model in fc for fc in forecast_straglers):
-                    expected_forecasts.append(model)
-
-        return expected_forecasts
+                forecast_names = [regex.match(name).group(1) for name in names]
+                for forecast_name in forecast_names:
+                    unique_forecasts[forecast_name] = None
+            except AttributeError:
+                pass
+        return list(unique_forecasts.keys())
 
     def parse_evaluation_tests(self, xml_elem=None):
-        """
-        either parses entire configuration file, or tests from single element.
-        xml_elem would be used to get schedules for different evaluations
-        :param xml_elem: xml_elem obj to parse tests from
-        :return: returns list of xml elements
-        """
-        # parse all tests
-        if not xml_elem:
-            tests = []
-            try:
-                for elem in self.fg.next('evaluationTests'):
-                    if elem.text:
-                        tests.extend(elem.text.strip().split(' '))
-            except AttributeError:
-                # print warning that no evaluation tests were found.
-                print("Warning: No evaluation tests found for ForecastGroup {}."
-                      .format(self.group_path))
-            return tests
-        # only parse for particular element
-        else:
-            if xml_elem.text:
-                return xml_elem.text.strip().split(' ')
+            """
+            either parses entire configuration file, or tests from single element.
+            xml_elem would be used to get schedules for different evaluations
+            :param xml_elem: xml_elem obj to parse tests from
+            :return: returns list of xml elements
+            """
+            # parse all tests
+            if not xml_elem:
+                tests = []
+                try:
+                    for elem in self.fg.next('evaluationTests'):
+                        if elem.text:
+                            tests.extend(elem.text.strip().split(' '))
+                except AttributeError:
+                    # print warning that no evaluation tests were found.
+                    print("Warning: No evaluation tests found for ForecastGroup {}."
+                          .format(self.group_path))
+                return tests
+            # only parse for particular element
             else:
-                return []
+                if xml_elem.text:
+                    return xml_elem.text.strip().split(' ')
+                else:
+                    return []
 
     def parse_schedule(self, xml_tag):
         """
@@ -592,6 +566,8 @@ class ForecastGroups(Model):
 
 
 class Forecasts(Model):
+
+    # possible extensions for forecast files
     forecast_extensions = ['.xml', '-fromXML.xml', '.dat', '-fromXML.dat', '-fromXML.dat.targz']
 
     def __init__(self, schedule_id, group_id, name, archive_dir,
@@ -736,9 +712,9 @@ class Evaluations(Model):
             # evaluations happen the day after the forecast
             if forecast_id.waiting_period:
                 waiting_period = forecast_id.waiting_period
-            # FIXME: hard-coded for one-day models, don't ignore
-            evaluation_date = schedule_id.start_date - timedelta(days=waiting_period-1)
-            current_date = datetime.today()
+            # FIXME: hard-coded for one-day models, don't forget to change
+            evaluation_date = schedule_id.start_date
+            current_date = datetime.today() - timedelta(days=waiting_period-1)
             if self.status == 'Missing' and evaluation_date > current_date:
                 self.status = 'Scheduled'
 
@@ -750,7 +726,7 @@ class Evaluations(Model):
         year = self.date.strftime("%Y")
         month = self.date.strftime("%-m")
         day = self.date.strftime("%-d")
-        p = re.compile(r"^\S*{}-Test_{}_{}_{}_{}-fromXML.xml"
+        p = re.compile(r"^\S*{}-Test_{}_{}_{}_{}\S*.xml.\S*"
                        .format(self.name, self.forecast_name, month, day, year))
         return p
 
