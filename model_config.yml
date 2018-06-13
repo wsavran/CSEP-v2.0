@@ -94,7 +94,6 @@ GSF_ANISO:
     name:  Joshua Gordon
     email:
 
-
 GSF_ISO:
   forecasts:
     - GSF_ISO
@@ -109,19 +108,13 @@ ETASSYN_DROneDay:
     name: David Rhoades
     email: d.rhoades@gns.cri.nz
 
-
-ETAS_DROneDayMd2.95:
-  forecasts:
-  - ETAS_DROneDay
-  author:
-    name: David Rhoades
-    email: d.rhoades@gns.cri.nz
-
-
 ETAS_DROneDay:
   forecasts:
-  - ETAS_DROneDay
+  - ETAS_DROneDayMd2
+  - ETAS_DROneDayMd3
   - ETAS_DROneDayPPEMd2
+  - ETAS_DROneDayMd2.95
+  - ETAS_DROneDayPPEMd3
   author:
     name: David Rhoades
     email: d.rhoades@gns.cri.nz
