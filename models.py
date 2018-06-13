@@ -510,19 +510,29 @@ class ForecastGroups(Model):
         # scan archive directory for files
         # if we need performance, this could be cached
         for root, dirs, names in os.walk(work_dir):
-            regex = re.compile(r'(\w*)_\d+_\d+_\d+\S*')
+            regex = re.compile(r'(\S*)_\d+_\d+_\d+\S*')
             try:
                 forecast_names = [regex.match(name).group(1) for name in names]
                 for forecast_name in forecast_names:
-                    unique_forecasts[forecast_name] = None
+                    if not forecast_name.startswith('scec.csep'):
+                        unique_forecasts[forecast_name] = None
             except AttributeError:
                 pass
         # if file has substring of model add to the expected forecasts
-        found_files = list(unique_forecasts.keys())
-        for ff in found_files:
-            if any(model in ff for model in self.models):
-                expected_forecasts.append(ff)
-
+        found_forecasts = list(unique_forecasts.keys())
+        # first add forecasts sharing the name as model
+        # and remove from found files and listed models
+        model_straglers = self.models
+        for model in model_straglers:
+            # model name is forecast name
+            if model in found_forecasts:
+                expected_forecasts.append(model)
+                # hard-coded hack
+                if model == 'ETAS':
+                    continue
+            for fc in found_forecasts:
+                if model in fc:
+                    expected_forecasts.append(fc)
         return expected_forecasts
 
     def parse_evaluation_tests(self, xml_elem=None):
