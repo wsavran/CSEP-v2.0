@@ -358,12 +358,12 @@ class ForecastGroups(Model):
             self.group_name = self.parse_group_name()
             self.config_filepath = os.path.join(self.group_path, 'forecast.init.xml')
             self.models = self.parse_models()
+            self.forecast_dir = self.parse_forecast_dir()
             self.expected_forecasts = self.parse_expected_forecasts()
             self.evaluation_schedule = self.parse_schedule('evaluationTests')
             self.forecast_schedule = self.parse_schedule('models')
             self.group_dir = os.path.basename(self.group_path)
             self.evaluation_tests = self.parse_evaluation_tests()
-            self.forecast_dir = self.parse_forecast_dir()
             self.result_dir = self.parse_result_dir()
             self.post_processing = self.parse_postprocessing()
             self.entry_date_text = self.parse_entry_date_text()
@@ -504,7 +504,11 @@ class ForecastGroups(Model):
         """
 
         unique_forecasts = {}
+        expected_forecasts = []
         work_dir = self.forecast_dir
+
+        # scan archive directory for files
+        # if we need performance, this could be cached
         for root, dirs, names in os.walk(work_dir):
             regex = re.compile(r'(\w*)_\d+_\d+_\d+\S*')
             try:
@@ -513,7 +517,13 @@ class ForecastGroups(Model):
                     unique_forecasts[forecast_name] = None
             except AttributeError:
                 pass
-        return list(unique_forecasts.keys())
+        # if file has substring of model add to the expected forecasts
+        found_files = list(unique_forecasts.keys())
+        for ff in found_files:
+            if any(model in ff for model in self.models):
+                expected_forecasts.append(ff)
+
+        return expected_forecasts
 
     def parse_evaluation_tests(self, xml_elem=None):
             """
@@ -614,7 +624,7 @@ class Forecasts(Model):
         if group_id.dispatcher_id and not self.waiting_period:
             self.waiting_period = group_id.dispatcher_id.waiting_period
         forecast_date = schedule_id.start_date
-        current_date = datetime.today() - timedelta(days=self.waiting_period)
+        current_date = datetime.today() - timedelta(days=int(self.waiting_period))
         if self.status == 'Missing' and forecast_date > current_date:
             self.status = 'Scheduled'
 
