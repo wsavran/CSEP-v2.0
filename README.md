@@ -12,11 +12,11 @@ multiple dispatchers can be added to the ```extract.py``` script, or changed for
 #### useful queries
 
 print count of missing forecasts in each group <br>
-``` select name, count(Forecasts.rowid) from Forecasts join ScheduledForecasts on Forecasts.schedule_id=ScheduledForecasts.scheduled_forecast_id where status='Missing' and ScheduledForecasts.date_time < date('2018-05-10') group by name; ```
+``` select name, count(Forecasts.rowid) from Forecasts where status='Missing' group by name; ```
 
 list forecast groups and associated forecasts <br>
 ``` select ForecastGroups.group_path, group_concat(distinct Forecasts.name) from ForecastGroups join Forecasts on ForecastGroups.forecastgroup_id=Forecasts.group_id group by ForecastGroups.group_name;```
 
 list name of missing forecasts and date <br>
-```select ScheduledForecasts.date_time, group_concat(Forecasts.name) from Forecasts join ScheduledForecasts on Forecasts.schedule_id=ScheduledForecasts.scheduled_forecast_id where status='Missing' and ScheduledForecasts.date_time < date('2018-05-10') group by ScheduledForecasts.date_time;```
+```select ScheduledForecasts.date_time, group_concat(Forecasts.name) from Forecasts join ScheduledForecasts on Forecasts.schedule_id=ScheduledForecasts.scheduled_forecast_id where status='Missing' group by ScheduledForecasts.date_time;```
 

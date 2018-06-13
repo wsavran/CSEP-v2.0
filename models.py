@@ -732,9 +732,9 @@ class Evaluations(Model):
             # evaluations happen the day after the forecast
             if forecast_id.waiting_period:
                 waiting_period = forecast_id.waiting_period
-            # FIXME: hard-coded for one-day models, don't forget to change
+            # FIXME: hard-coded for one-day models, don't ignore
             evaluation_date = schedule_id.start_date
-            current_date = datetime.today() - timedelta(days=waiting_period-1)
+            current_date = datetime.today() - timedelta(days=int(waiting_period-1))
             if self.status == 'Missing' and evaluation_date > current_date:
                 self.status = 'Scheduled'
 
