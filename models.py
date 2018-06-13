@@ -358,12 +358,12 @@ class ForecastGroups(Model):
             self.group_name = self.parse_group_name()
             self.config_filepath = os.path.join(self.group_path, 'forecast.init.xml')
             self.models = self.parse_models()
+            self.forecast_dir = self.parse_forecast_dir()
             self.expected_forecasts = self.parse_expected_forecasts()
             self.evaluation_schedule = self.parse_schedule('evaluationTests')
             self.forecast_schedule = self.parse_schedule('models')
             self.group_dir = os.path.basename(self.group_path)
             self.evaluation_tests = self.parse_evaluation_tests()
-            self.forecast_dir = self.parse_forecast_dir()
             self.result_dir = self.parse_result_dir()
             self.post_processing = self.parse_postprocessing()
             self.entry_date_text = self.parse_entry_date_text()
@@ -496,76 +496,70 @@ class ForecastGroups(Model):
         not directly correlate to the list of models and multiple forecasts may be produced by the
         same model, eg., ETAS_DROneDay -> [ETAS_DROneDayMd3, ETAS_DROneDayPPEMd3]
 
-        CSEP prints a list of expected models under the models tag using the file attribute. if models
-        run successfully, they will be listed here. we expect that there could be more forecasts than
-        models, but not more models than forecasts. based on this rationale, the expected forecasts
-        will be first parsed from the configuration file. the basename of the forecast will be stripped
-        and combined with the forecast date and all possible suffixes before considering the model
-        is missing. furthermore, if there are models listed under the models tag that are not present
-        in files tag, they will be assigned a default filename. this could cause issues with models
-        that produce multiple forecasts, but there is no way to tell a priori which models are expected.
-
-        if this code were to be generalized for all testing centers, a better solution would be to
-        introduce the relationship between models and forecasts and have that defined by the
-        testing center manager. this solution would provide additional information such as author names
-        and contact information. if not added in csep1, it should most definitely be included in the
-        new system.
-
-        :param predict_missing [bool] if true, try and determine which forecasts are expected
-        based on the model tags
+        this algorithm scans the archived forecast directory and extracts the forecast name using
+        regular expressions. The list does not use any a priori information from the forecast group configuration
+        file.
 
         :return: expected_forecasts [list] list of expected forecasts
         """
-        # part 1: grab forecasts from files attribute
+
+        unique_forecasts = {}
         expected_forecasts = []
-        found_files = []
-        model_tags = self.fg.elements(self.genericModel)
-        for model in model_tags:
+        work_dir = self.forecast_dir
+
+        # scan archive directory for files
+        # if we need performance, this could be cached
+        for root, dirs, names in os.walk(work_dir):
+            regex = re.compile(r'(\S*)_\d+_\d+_\d+\S*')
             try:
-                files = model.attrib['files'].split(' ')
-            except KeyError:
-                return []
-            if files:
-                # hardcoded to reflect CSEP filenames
-                found_files = list(map(lambda x: '_'.join(x.split('_')[0:-3]), files))
-            expected_forecasts.extend(found_files)
-
-        # part 2: look for model substring in remaining found forecasts
-        # if not found, add to expected list
-        if predict_missing:
-            forecast_straglers = list(set(found_files) - set(self.models))
-            model_straglers = list(set(self.models) - set(found_files))
-            for model in model_straglers:
-                if not any(model in fc for fc in forecast_straglers):
-                    expected_forecasts.append(model)
-
+                forecast_names = [regex.match(name).group(1) for name in names]
+                for forecast_name in forecast_names:
+                    if not forecast_name.startswith('scec.csep'):
+                        unique_forecasts[forecast_name] = None
+            except AttributeError:
+                pass
+        # if file has substring of model add to the expected forecasts
+        found_forecasts = list(unique_forecasts.keys())
+        # first add forecasts sharing the name as model
+        # and remove from found files and listed models
+        model_straglers = self.models
+        for model in model_straglers:
+            # model name is forecast name
+            if model in found_forecasts:
+                expected_forecasts.append(model)
+                # hard-coded hack
+                if model == 'ETAS':
+                    continue
+            for fc in found_forecasts:
+                if model in fc:
+                    expected_forecasts.append(fc)
         return expected_forecasts
 
     def parse_evaluation_tests(self, xml_elem=None):
-        """
-        either parses entire configuration file, or tests from single element.
-        xml_elem would be used to get schedules for different evaluations
-        :param xml_elem: xml_elem obj to parse tests from
-        :return: returns list of xml elements
-        """
-        # parse all tests
-        if not xml_elem:
-            tests = []
-            try:
-                for elem in self.fg.next('evaluationTests'):
-                    if elem.text:
-                        tests.extend(elem.text.strip().split(' '))
-            except AttributeError:
-                # print warning that no evaluation tests were found.
-                print("Warning: No evaluation tests found for ForecastGroup {}."
-                      .format(self.group_path))
-            return tests
-        # only parse for particular element
-        else:
-            if xml_elem.text:
-                return xml_elem.text.strip().split(' ')
+            """
+            either parses entire configuration file, or tests from single element.
+            xml_elem would be used to get schedules for different evaluations
+            :param xml_elem: xml_elem obj to parse tests from
+            :return: returns list of xml elements
+            """
+            # parse all tests
+            if not xml_elem:
+                tests = []
+                try:
+                    for elem in self.fg.next('evaluationTests'):
+                        if elem.text:
+                            tests.extend(elem.text.strip().split(' '))
+                except AttributeError:
+                    # print warning that no evaluation tests were found.
+                    print("Warning: No evaluation tests found for ForecastGroup {}."
+                          .format(self.group_path))
+                return tests
+            # only parse for particular element
             else:
-                return []
+                if xml_elem.text:
+                    return xml_elem.text.strip().split(' ')
+                else:
+                    return []
 
     def parse_schedule(self, xml_tag):
         """
@@ -592,6 +586,8 @@ class ForecastGroups(Model):
 
 
 class Forecasts(Model):
+
+    # possible extensions for forecast files
     forecast_extensions = ['.xml', '-fromXML.xml', '.dat', '-fromXML.dat', '-fromXML.dat.targz']
 
     def __init__(self, schedule_id, group_id, name, archive_dir,
@@ -750,7 +746,7 @@ class Evaluations(Model):
         year = self.date.strftime("%Y")
         month = self.date.strftime("%-m")
         day = self.date.strftime("%-d")
-        p = re.compile(r"^\S*{}-Test_{}_{}_{}_{}-fromXML.xml"
+        p = re.compile(r"^\S*{}-Test_{}_{}_{}_{}\S*.xml.\S*"
                        .format(self.name, self.forecast_name, month, day, year))
         return p
 

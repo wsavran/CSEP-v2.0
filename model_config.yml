@@ -1,0 +1,140 @@
+# this configuration file provides an explicit mapping between models and forecasts.
+# using this configuration is in development, and will be eventually put into the database
+
+
+
+# model_name
+#    - forecast_name1
+#    - forecast_name2
+#    - forecast_name3
+
+ETAS:
+  forecasts:
+    - ETAS
+  author:
+    name:
+    email:
+
+KJSSOneDayCalifornia:
+  forecasts:
+    - KJSSOneDayCalifornia
+  author:
+    name:
+    email:
+
+STEPJAVA:
+  forecasts:
+    - STEPJAVA
+  author:
+    name: Matt Gerstenberger
+    email: m.gerstenberger@gns.cri.nz
+
+ETASV1.1:
+  forecasts:
+    - ETASV1.1
+  author:
+    name: Jiancang Zhuang
+    email:
+
+ETAS_HW:
+  forecasts:
+    - ETAS_HWMd3
+  author:
+    name: Agnes Helmstetter
+    email: agnes.helmstetter@univ-grenoble-alpes.fr
+
+K3:
+  forecasts:
+    - K3Md3
+    - K3Md2
+  author:
+    name: Agnes Helmstetter
+    email: agnes.helmstetter@univ-grenoble-alpes.fr
+
+OneDayBayesianBMA:
+  forecasts:
+    - OneDayBayesianBMA
+  author:
+    name:
+    email:
+
+OneDayBayesianSeqBMA:
+  forecasts:
+    - OneDayBayesianSeqBMA
+  author:
+    name: Max Werner
+    email: max.werner@bristol.ac.uk
+
+ETAS_DROneDay:
+  forecasts:
+    - ETAS_DROneDayMd3
+    - ETAS_DROneDayPPEMd3
+  author:
+    name: David Rhoades
+    email:
+
+ETAS_HW_K3_AVERAGE_Md3:
+  forecasts:
+    - ETAS_HW_K3_AVERAGE_Md3
+  author:
+    name: Max Werner
+    email: max.werner@bristol.ac.uk
+
+ETAS_HW_K3_AVERAGE_Md2:
+  forecasts:
+    - ETAS_HW_K3_AVERAGE_Md2
+  author:
+    name:
+    email:
+
+GSF_ANISO:
+  forecasts:
+    - GSF_ANISO
+  author:
+    name:  Joshua Gordon
+    email:
+
+GSF_ISO:
+  forecasts:
+    - GSF_ISO
+  author:
+    name: Joshua Gordon
+    email:
+
+ETASSYN_DROneDay:
+  forecasts:
+  - ETASSYN_DROneDayMd2.95
+  author:
+    name: David Rhoades
+    email: d.rhoades@gns.cri.nz
+
+ETAS_DROneDay:
+  forecasts:
+  - ETAS_DROneDayMd2
+  - ETAS_DROneDayMd3
+  - ETAS_DROneDayPPEMd2
+  - ETAS_DROneDayMd2.95
+  - ETAS_DROneDayPPEMd3
+  author:
+    name: David Rhoades
+    email: d.rhoades@gns.cri.nz
+
+
+JANUSOneDay:
+  forecasts:
+  - JANUSOneDayTV
+  - JANUSOneDayEEPAS1F
+  - JANUSOneDayPPE
+  - JANUSOneDay
+  author:
+    name:
+    email:
+
+
+SE2OneDay:
+  forecasts:
+    - SE2OneDay
+  author:
+    name:
+    email:
+
