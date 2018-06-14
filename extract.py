@@ -24,5 +24,7 @@ for dispatcher in dispatchers:
     dispatcher = Dispatchers(dispatcher, conn=db)
     for group in dispatcher.forecast_groups():
         for forecast in group.forecasts():
-            forecast.insert()
+            for evaluation in forecast.evaluations():
+                evaluation.insert()
+
 db.commit()
