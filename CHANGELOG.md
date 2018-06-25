@@ -14,18 +14,18 @@ hard-coded into the model implementation in CSEP. exists as ETAS_DROneDayPPE and
 .xml
 * [fixed] forecasts could be missing from files attribute, but models listed in the models tag produce forecasts with 
 unexpected names e.g., K3Md2 forecasts in one-day-models-Md2-V12.10 forecast group. difficult to determine perfect mapping
-from model -> without a priori information
+from model -> forecast without a priori information
 * evaluations linking to external forecast groups not being attributed to forecasts introduced in previous forecast 
 groups, eg., additional evaluations in one-day-models-V16.4 group
 * [fixed] evaluations could contain different filetypes than -fromXML.xml; namely for the TX and WX tests
 * [fixed] waiting period applied to evaluations incorrectly
+* evaluations need to be checked for in all forecasts groups where model is defined
  
 ### features:
 * [done] added tests for model base class
 * [done] add forecast group name to schema
 * [done] add scheduled tag to status to simplify queries
  
-
 ### changes:
 * [done] incorporate list of models based on files tag in forecast group init file, and locate missing models.
 * [done] added waiting period to dispatcher table

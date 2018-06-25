@@ -15,14 +15,21 @@ sql_statements = 'db_schema.sql'
 db = create_schema(sql_statements, db_name)
 
 # start with ANSS one-day catalogs
-dispatchers = ['/usr/local/csep/cronjobs/dispatcher_ANSS1985_one_day.tcsh',
-               '/usr/local/csep/cronjobs/dispatcher_ANSS1985_M2_95.tcsh',
-               '/usr/local/csep/cronjobs/dispatcher_ANSS1932_notFiltered_Md2_one_day.tcsh',
-               '/usr/local/csep/cronjobs/dispatcher_ANSS1985_forecasts.tcsh'
-               ]
+# dispatchers = ['/usr/local/csep/cronjobs/dispatcher_ANSS1985_one_day.tcsh',
+#                '/usr/local/csep/cronjobs/dispatcher_ANSS1985_M2_95.tcsh',
+#                '/usr/local/csep/cronjobs/dispatcher_ANSS1932_notFiltered_Md2_one_day.tcsh',
+#                '/usr/local/csep/cronjobs/dispatcher_ANSS1985_forecasts.tcsh'
+#                ]
+
+dispatchers = ['/usr/local/csep/cronjobs/dispatcher_ANSS1985_one_day.tcsh']
+
+# get list of results files on operational system
+
+
 for dispatcher in dispatchers:
     dispatcher = Dispatchers(dispatcher, conn=db)
     for group in dispatcher.forecast_groups():
         for forecast in group.forecasts():
-            forecast.insert()
+            for evaluation in forecast.evaluations(full_list_of_files=full_list):
+                evaluation.insert()
 db.commit()

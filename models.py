@@ -43,7 +43,7 @@ class Model:
         """
         # enforcing unique values for foreign keys.
         # logic being, that we dont want to duplicate rows in fk tables, but if the system finds, for example, a
-        # forecast model that has the same file path existing in two forecast groups we'd want that duplicated
+        # forecast model that has the same file path existing in two forecast groups we would not want that duplicated
         if isinstance(value, Model):
             for unique_field in value._unique_columns:
                 if not value._inserted:
@@ -106,7 +106,7 @@ class Model:
 
     def save(self):
         """
-        no error checking here.
+        no error checking here. will not insert blank models
         :return:
         """
         if self._inserted:
@@ -339,7 +339,6 @@ class ForecastGroups(Model):
         self.fg = None
         self.group_dir = None
         self.forecast_dir = None
-        self.result_dir = None
         self.post_processing = None
         self.entry_date = None
         self.models = []
@@ -381,6 +380,9 @@ class ForecastGroups(Model):
         """
         generator function to create dates used to expect forecasts and evaluations
         :return:
+
+        FIXME: modify this routine to generate a schedule based on the schedule in the forecast group config file
+        FIXME: addresses issues #12 and #15
         """
         if self.entry_date:
             s = Schedule(self.entry_date)
@@ -490,7 +492,7 @@ class ForecastGroups(Model):
                   .format(self.group_path))
         return models
 
-    def parse_expected_forecasts(self, predict_missing=False):
+    def parse_expected_forecasts(self):
         """
         forecasts do not map 1 to 1 to models in CSEP. the expected filename of some forecasts may
         not directly correlate to the list of models and multiple forecasts may be produced by the
@@ -668,7 +670,7 @@ class Forecasts(Model):
             filepaths.append(abs_path)
         return filepaths
 
-    def evaluations(self):
+    def evaluations(self, **kwargs):
         """
         generator function to produce evaluations for a given forecast
         :return: evaluation object or empty iterator if none
@@ -677,7 +679,7 @@ class Forecasts(Model):
         schedule = ScheduledEvaluations(self.schedule_id.start_date, conn=self.conn)
         if self.name and self.group_id.result_dir:
             for test in self.group_id.evaluation_tests:
-                evaluation = Evaluations(schedule, self, self.group_id.result_dir, test, conn=self.conn)
+                evaluation = Evaluations(schedule, self, self.group_id.result_dir, test, conn=self.conn, **kwargs)
                 yield evaluation
         else:
             return iter([])
@@ -685,7 +687,7 @@ class Forecasts(Model):
 
 class Evaluations(Model):
     def __init__(self, schedule_id, forecast_id, archive_dir, evaluation_name, filepath='', status='',
-                 compute_datetime='', **kwargs):
+                 compute_datetime='', full_list_of_files=[], **kwargs):
         super().__init__(**kwargs)
 
         # database fields
@@ -696,18 +698,25 @@ class Evaluations(Model):
         self.status = status
         self.compute_datetime = compute_datetime
 
-        # set unique fields
-        self._unique_columns.append(self.filepath)
-
-        self.daily_archive_dir = None
-        self.meta_filepath = None
+        self.daily_archive_dir = ''
+        self.meta_filepath = []
         self.forecast_group_archive_dir = archive_dir
         self.relative_filepath = filepath
 
         self.date = schedule_id.start_date  # get from schedule_id
         self.forecast_name = forecast_id.name
         self._list_of_result_files = []
-        if self.date and self.forecast_group_archive_dir:
+        self.full_list_of_files = full_list_of_files
+
+        # need date and name for regex
+        if self.full_list_of_files and self.date and self.name:
+            self.filepath = self.determine_full_filepath(self._build_regex(),
+                                                         full_list_of_paths=self.full_list_of_files)
+
+            self.meta_filepath = self.determine_meta_filepath(self._build_regex(),
+                                                              full_list_of_paths=self.full_list_of_files)
+        # cant build file path without date or result_dir
+        elif self.date and self.forecast_group_archive_dir:
             self.daily_archive_dir = os.path.join(
                 self.forecast_group_archive_dir,
                 self.date.strftime("%Y-%m-%d")
@@ -717,26 +726,25 @@ class Evaluations(Model):
             except FileNotFoundError:
                 self.status = 'Missing'
 
-            # determine if evaluation exists on server
-            if self.name and self.daily_archive_dir and self._list_of_result_files:
-                self.filepath = self.determine_full_filepath(regex=self._build_regex())
-                self.meta_filepath = self.determine_meta_filepath(regex=self._build_regex())
+            if self.name and self.daily_archive_dir:
+                self.filepath = self.determine_full_filepath(self._build_regex())
+                self.meta_filepath = self.determine_meta_filepath(self._build_regex())
 
-            # set status of evaluation
-            if self.filepath:
-                self.status = "Complete"
-            else:
-                self.status = "Missing"
+        # set status of evaluation
+        if self.filepath:
+            self.status = "Complete"
+        else:
+            self.status = "Missing"
 
-            # assign forecasts as scheduled if greater than today's date
-            # evaluations happen the day after the forecast
-            if forecast_id.waiting_period:
-                waiting_period = forecast_id.waiting_period
-            # FIXME: hard-coded for one-day models, don't ignore
-            evaluation_date = schedule_id.start_date
-            current_date = datetime.today() - timedelta(days=int(waiting_period)-1)
-            if self.status == 'Missing' and evaluation_date > current_date:
-                self.status = 'Scheduled'
+        # assign forecasts as scheduled if greater than today's date
+        # evaluations happen the day after the forecast
+        if forecast_id.waiting_period:
+            waiting_period = forecast_id.waiting_period
+        # FIXME: hard-coded for one-day models, don't ignore
+        evaluation_date = schedule_id.start_date
+        current_date = datetime.today() - timedelta(days=int(waiting_period)-1)
+        if self.status == 'Missing' and evaluation_date > current_date:
+            self.status = 'Scheduled'
 
     def _build_regex(self):
         """
@@ -750,34 +758,85 @@ class Evaluations(Model):
                        .format(self.name, self.forecast_name, month, day, year))
         return p
 
-    def determine_full_filepath(self, regex=None):
+    def determine_full_filepath(self, regex, full_list_of_paths=[]):
         """
         locates evaluation files in the results directory
         :param regex: regex object
+        :param full_list_of_paths: optional, list of paths to search
         :return: list of found forecast files, empty list if none
         """
         paths = self._list_of_result_files
+        if full_list_of_paths:
+            paths = full_list_of_paths
         filters = [regex.match, lambda x: not x.endswith('.meta')]
         matches = [path for path in paths if all(f(path) for f in filters)]
         # apply full filename
         full = list(map(lambda x: os.path.join(self.daily_archive_dir, x), matches))
         return ', '.join(full)
 
-    def determine_meta_filepath(self, regex=None):
+    def determine_meta_filepath(self, regex, full_list_of_paths=[]):
         """
         locates evaluation files in the results directory
         :param regex: regex object
+        :param full_list_of_paths: optional, list of paths to search
         :return: list of found forecast files, empty list if none
         """
         paths = self._list_of_result_files
+        if full_list_of_paths:
+            paths = full_list_of_paths
         filters = [regex.match, lambda x: x.endswith('.meta')]
         matches = [path for path in paths if all(f(path) for f in filters)]
         # apply full filename
         full = list(map(lambda x: os.path.join(self.daily_archive_dir, x), matches))
         return ', '.join(full)
 
+    def insert(self):
+        """
+        insert model into the database.
+        requirements: each db field must be defined as an attribute of the class itself or an instance of Model, in which
+        case that Model will be inserted and the "insert_id" of that insert will be used as the insert value.
+        this will be recursively called for each model that needs to be inserted
+        :return: (bool) True if successful; False if not successful
+        """
+        if not self.conn and not self.fields and not self.table:
+            raise RuntimeError("Cannot insert values into db unless connection object is bound to Model instance.")
 
+        # get fields and values from class
+        fields_values = list(self._db_values())
+        num = len(fields_values)
+        if num == 0 or not fields_values:
+            print("Warning: Skipping inserts, no values found.")
+            return False
+        try:
+            for field, value in fields_values:
+                self._prepare_insert_values(field, value)
 
+            fields, values = zip(*self._insert_values.items())
+            fields = ', '.join(fields)
+            values = ', '.join(values)
+
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO {0} ({1}) VALUES ({2})".format(self.table, fields, values))
+
+            # update insert id for fk purposes
+            self._insert_id = cursor.lastrowid
+            self._inserted = True
+
+        # handle the potential unique case
+        except sqlite3.IntegrityError:
+            # get rowid of table where the unique constraint was violated
+            cursor = self.conn.cursor()
+            cursor.execute('select rowid, filepath from Evaluations where forecast_id=? and name=?',
+                           (self.forecast_id.insert_id, str(self.name)))
+            result = cursor.fetchone()
+            if result and self.status == "Complete":
+                rowid = int(result[0])
+                db_filepath = str(result[1])
+                updated_filepath = self.filepath + ', ' + db_filepath
+                cursor.execute('update Evaluations set filepath=?, status=? where rowid=?',
+                               (updated_filepath, self.status, rowid))
+
+        return True
 
 
 
