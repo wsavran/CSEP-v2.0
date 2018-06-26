@@ -27,4 +27,5 @@ for dispatcher in dispatchers:
         for forecast in group.forecasts():
             for evaluation in forecast.evaluations():
                 evaluation.insert()
+                
 db.commit()
