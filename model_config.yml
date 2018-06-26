@@ -1,140 +1,282 @@
-# this configuration file provides an explicit mapping between models and forecasts.
-# using this configuration is in development, and will be eventually put into the database
+"""
+document describing the one-day-models running on the CSEP operational system
+"""
+models:
+  - model: ETAS
+    forecasts:
+      - name: ETAS
+        group: one-day-models
+        class: one-day-models
+        description:
+        catalog:
+    author:
+      name:
+      email:
+    publication:
 
+  - model: KJSSOneDayCalifornia
+    forecasts:
+      - name: KJSSOneDayCalifornia
+        group:
+        description:
+        catalog:
+    author:
+      name:
+      email:
+    publication:
 
+  - model: STEPJAVA
+    forecasts:
+      - name: STEPJAVA
+        group:
+        description:
+        catalog:
+    author:
+      name: Matt Gerstenberger
+      email: m.gerstenberger@gns.cri.nz
+    publication:
 
-# model_name
-#    - forecast_name1
-#    - forecast_name2
-#    - forecast_name3
+  - model: ETASV1.1
+    forecasts:
+      - name: ETASV1.1
+        group:
+        description:
+        catalog:
+    author:
+      name: Jiancang Zhuang
+      email:
+    publication:
 
-ETAS:
-  forecasts:
-    - ETAS
-  author:
-    name:
-    email:
+  - model: ETAS_HW
+    forecasts:
+      - name: ETAS_HWMd3
+        group:
+        description:
+        catalog:
+    author:
+      name: Agnes Helmstetter
+      email: agnes.helmstetter@univ-grenoble-alpes.fr
+    publication:
 
-KJSSOneDayCalifornia:
-  forecasts:
-    - KJSSOneDayCalifornia
-  author:
-    name:
-    email:
+  - model: K3
+    forecasts:
+      - name: K3Md3
+        group:
+        description:
+        catalog:
+      - name: K3Md2
+        group:
+        description:
+        catalog:
+    author:
+      name: Agnes Helmstetter
+      email: agnes.helmstetter@univ-grenoble-alpes.fr
+    publication:
 
-STEPJAVA:
-  forecasts:
-    - STEPJAVA
-  author:
-    name: Matt Gerstenberger
-    email: m.gerstenberger@gns.cri.nz
+  - model: OneDayBayesianBMA
+    forecasts:
+      - name: OneDayBayesianBMA
+        group:
+        description:
+        catalog:
+    author:
+      name: Max Werner
+      email: max.werner@bristol.ac.uk
+    publication:
 
-ETASV1.1:
-  forecasts:
-    - ETASV1.1
-  author:
-    name: Jiancang Zhuang
-    email:
+  - model: OneDayBayesianSeqBMA
+    forecasts:
+      - name: OneDayBayesianSeqBMA
+        group:
+        description:
+        catalog:
+    author:
+      name: Max Werner
+      email: max.werner@bristol.ac.uk
+    publication:
 
-ETAS_HW:
-  forecasts:
-    - ETAS_HWMd3
-  author:
-    name: Agnes Helmstetter
-    email: agnes.helmstetter@univ-grenoble-alpes.fr
+  - model: ETAS_DROneDay
+    forecasts:
+      - name: ETAS_DROneDayMd3
+        group:
+        description:
+        catalog:
+      - name: ETAS_DROneDayPPEMd3
+        description:
+        catalog:
+    author:
+      name: David Rhoades
+      email:
+    publication:
 
-K3:
-  forecasts:
-    - K3Md3
-    - K3Md2
-  author:
-    name: Agnes Helmstetter
-    email: agnes.helmstetter@univ-grenoble-alpes.fr
+  - model: ETAS_HW_K3_AVERAGE_Md3
+    forecasts:
+      - name: ETAS_HW_K3_AVERAGE_Md3
+        group:
+        description:
+        catalog:
+    author:
+      name: Max Werner
+      email: max.werner@bristol.ac.uk
+    publication:
 
-OneDayBayesianBMA:
-  forecasts:
-    - OneDayBayesianBMA
-  author:
-    name:
-    email:
+  - model: ETAS_HW_K3_AVERAGE_Md2
+    forecasts:
+      - name: ETAS_HW_K3_AVERAGE_Md2
+        group:
+        description:
+        catalog:
+    author:
+      name: Max Werner
+      email: max.werner@bristol.ac.uk
+    publication:
 
-OneDayBayesianSeqBMA:
-  forecasts:
-    - OneDayBayesianSeqBMA
-  author:
-    name: Max Werner
-    email: max.werner@bristol.ac.uk
+  - model: GSF_ANISO
+    forecasts:
+      - name: GSF_ANISO
+        group:
+        description:
+        catalog:
+    author:
+      name:  Joshua Gordon
+      email:
+    publication:
 
-ETAS_DROneDay:
-  forecasts:
-    - ETAS_DROneDayMd3
-    - ETAS_DROneDayPPEMd3
-  author:
-    name: David Rhoades
-    email:
+  - model: GSF_ISO
+    forecasts:
+      - name: GSF_ISO
+        group:
+        description:
+        catalog:
+    author:
+      name: Joshua Gordon
+      email:
+    publication:
 
-ETAS_HW_K3_AVERAGE_Md3:
-  forecasts:
-    - ETAS_HW_K3_AVERAGE_Md3
-  author:
-    name: Max Werner
-    email: max.werner@bristol.ac.uk
+  - model: ETASSYN_DROneDay
+    forecasts:
+      - name: ETASSYN_DROneDayMd2.95
+        group:
+        description:
+        catalog:
+    author:
+      name: David Rhoades
+      email: d.rhoades@gns.cri.nz
+    publication:
 
-ETAS_HW_K3_AVERAGE_Md2:
-  forecasts:
-    - ETAS_HW_K3_AVERAGE_Md2
-  author:
-    name:
-    email:
+  - model: ETAS_DROneDay
+    forecasts:
+      - name: ETAS_DROneDayMd2
+        group:
+        description:
+        catalog:
+      - name: ETAS_DROneDayMd3
+        group:
+        description:
+        catalog:
+      - name: ETAS_DROneDayPPEMd2
+        group:
+        description:
+        catalog:
+      - name: ETAS_DROneDayMd2.95
+        group:
+        description:
+        catalog:
+      - name: ETAS_DROneDayPPEMd3
+        group:
+        description:
+        catalog:
+    author:
+      name: David Rhoades
+      email: d.rhoades@gns.cri.nz
+    publication:
 
-GSF_ANISO:
-  forecasts:
-    - GSF_ANISO
-  author:
-    name:  Joshua Gordon
-    email:
+  - model: JANUSOneDay
+    forecasts:
+      - name: JANUSOneDayTV
+        group:
+        description:
+        catalog:
+      - name: JANUSOneDayEEPAS1F
+        group:
+        description:
+        catalog:
+      - name: JANUSOneDayPPE
+        group:
+        description:
+        catalog:
+      - name: JANUSOneDay
+        group:
+        description:
+        catalog:
+    author:
+      name:
+      email:
+    publication:
 
-GSF_ISO:
-  forecasts:
-    - GSF_ISO
-  author:
-    name: Joshua Gordon
-    email:
+  - model: SE2OneDay
+    forecasts:
+      - name: SE2OneDay
+        group:
+        description:
+        catalog:
+    author:
+     name:
+     email:
+    publication:
 
-ETASSYN_DROneDay:
-  forecasts:
-  - ETASSYN_DROneDayMd2.95
-  author:
-    name: David Rhoades
-    email: d.rhoades@gns.cri.nz
-
-ETAS_DROneDay:
-  forecasts:
-  - ETAS_DROneDayMd2
-  - ETAS_DROneDayMd3
-  - ETAS_DROneDayPPEMd2
-  - ETAS_DROneDayMd2.95
-  - ETAS_DROneDayPPEMd3
-  author:
-    name: David Rhoades
-    email: d.rhoades@gns.cri.nz
-
-
-JANUSOneDay:
-  forecasts:
-  - JANUSOneDayTV
-  - JANUSOneDayEEPAS1F
-  - JANUSOneDayPPE
-  - JANUSOneDay
-  author:
-    name:
-    email:
-
-
-SE2OneDay:
-  forecasts:
-    - SE2OneDay
-  author:
-    name:
-    email:
-
+evaluations:
+  - name: N
+    first_seen: 2007-08-01
+    description:
+  - name: L
+    first_seen: 2007-08-01
+    description:
+  - name: CL
+    first_seen: 2007-08-01
+    description:
+  - name: M
+    first_seen: 2007-08-01
+    description:
+  - name: S
+    first_seen: 2007-08-01
+    description:
+  - name: LW
+    first_seen: 2007-08-01
+    description:
+  - name: RP
+    first_seen: 2007-08-01
+    description:
+  - name: RD
+    first_seen: 2007-08-01
+    description:
+  - name: RT
+    first_seen: 2007-08-01
+    description:
+  - name: RTT
+    first_seen: 2007-08-01
+    description:
+  - name: T
+    first_seen: 2009-01-01
+    description:
+  - name: W
+    first_seen: 2009-01-01
+    description:
+  - name: TX
+    first_seen: 2012-10-01
+    description:
+  - name: WX
+    first_seen: 2012-10-01
+    description:
+  - name: NSIM
+    first_seen: 2016-07-01
+    description:
+  - name: R
+    first_seen: 2016-10-01
+    description:
+  - name: MASS
+    first_seen: 2016-10-01
+    description:
+  - name: ROC
+    first_seen: 2016-10-01
+    description:
