@@ -4,7 +4,7 @@ from artifacts.create import create_schema
 from models import Dispatchers
 
 # create database
-db_name = 'csep_db_one-day-models.sql3'
+db_name = 'csep_db_one-day-eval_test_uniqueness_v2.sql3'
 
 try:
     os.remove(db_name)
@@ -21,10 +21,15 @@ dispatchers = ['/usr/local/csep/cronjobs/dispatcher_ANSS1985_one_day.tcsh',
                 '/usr/local/csep/cronjobs/dispatcher_ANSS1985_forecasts.tcsh'
                 ]
 
+#dispatchers = ['/usr/local/csep/cronjobs/dispatcher_ANSS1985_one_day.tcsh']
+
+groups = []
 for dispatcher in dispatchers:
-    dispatcher = Dispatchers(dispatcher, conn=db)
+    dispatcher = Dispatchers(dispatcher)
     for group in dispatcher.forecast_groups():
-        for forecast in group.forecasts():
-            for evaluation in forecast.evaluations():
-                evaluation.insert()
-db.commit()
+        if 'ETAS' in group.models:
+            groups.append((group.group_name, group.result_dir))
+
+for name, result_dir in groups:
+    if result_dir:
+        print("{} | {}".format(name, result_dir))
