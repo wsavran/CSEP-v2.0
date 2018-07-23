@@ -4,7 +4,7 @@ from artifacts.create import create_schema
 from models import Dispatchers
 
 # create database
-db_name = 'csep_db_one-day-models.sql3'
+db_name = 'csep_db_one-day-models-07-12-catalog-debug-v4.sql3'
 
 try:
     os.remove(db_name)
@@ -16,15 +16,16 @@ db = create_schema(sql_statements, db_name)
 
 # start with ANSS one-day catalogs
 dispatchers = ['/usr/local/csep/cronjobs/dispatcher_ANSS1985_one_day.tcsh',
-                '/usr/local/csep/cronjobs/dispatcher_ANSS1985_M2_95.tcsh',
-                '/usr/local/csep/cronjobs/dispatcher_ANSS1932_notFiltered_Md2_one_day.tcsh',
-                '/usr/local/csep/cronjobs/dispatcher_ANSS1985_forecasts.tcsh'
-                ]
+               '/usr/local/csep/cronjobs/dispatcher_ANSS1985_M2_95.tcsh',
+               '/usr/local/csep/cronjobs/dispatcher_ANSS1932_notFiltered_Md2_one_day.tcsh',
+               '/usr/local/csep/cronjobs/dispatcher_ANSS1985_forecasts.tcsh']
 
 for dispatcher in dispatchers:
     dispatcher = Dispatchers(dispatcher, conn=db)
     for group in dispatcher.forecast_groups():
+        # first handle the forecasts and evaluations
         for forecast in group.forecasts():
             for evaluation in forecast.evaluations():
                 evaluation.insert()
-db.commit()
+        db.commit()
+
