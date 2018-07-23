@@ -1,5 +1,6 @@
 import os
 import re
+import glob
 import sqlite3
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -13,6 +14,22 @@ TODO: 1) debug and propagate changes to models in api
       2) write script to use the api to populate database with csep-debug data, for all forecasts and 
          evaluations for one-day-models class
 """
+
+
+class Schedule:
+    end_date = datetime(2019, 1, 1, 0, 0, 0)
+
+    def __init__(self, start_date=None):
+        self.start_date = start_date
+
+    def date_range(self, days=1, months=0, years=0):
+        date = self.start_date
+        if date:
+            while date < self.end_date:
+                yield date
+                date += relativedelta(days=days, months=months, years=years)
+        else:
+            return iter([])
 
 
 class Model:
@@ -37,13 +54,12 @@ class Model:
     def _prepare_insert_values(self, field, value):
         """
         puts Model attributed into dict containing values that can be inserted into sqlite3
+        resolves all FK fields and stores values in sqlite3 quoted string format
         :param field: name of field
         :param value: value of the field, likely obtained from getattr()
         :return: none
         """
         # enforcing unique values for foreign keys.
-        # logic being, that we dont want to duplicate rows in fk tables, but if the system finds, for example, a
-        # forecast model that has the same file path existing in two forecast groups we would not want that duplicated
         if isinstance(value, Model):
             for unique_field in value._unique_columns:
                 if not value._inserted:
@@ -83,24 +99,20 @@ class Model:
         if num == 0 or not fields_values:
             print("Warning: Skipping inserts, no values found.")
             return False
-        try:
-            for field, value in fields_values:
-                self._prepare_insert_values(field, value)
 
-            fields, values = zip(*self._insert_values.items())
-            fields = ', '.join(fields)
-            values = ', '.join(values)
+        for field, value in fields_values:
+            self._prepare_insert_values(field, value)
 
-            cursor = self.conn.cursor()
-            cursor.execute("INSERT OR IGNORE INTO {0} ({1}) VALUES ({2})".format(self.table, fields, values))
+        fields, values = zip(*self._insert_values.items())
+        fields = ', '.join(fields)
+        values = ', '.join(values)
 
-            # update insert id for fk purposes
-            self._insert_id = cursor.lastrowid
-            self._inserted = True
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT OR IGNORE INTO {0} ({1}) VALUES ({2})".format(self.table, fields, values))
 
-        except sqlite3.IntegrityError:
-            print("Warning: Integrity Error, Unique constraint failed for table {}".format(self.table))
-            return False
+        # update insert id for fk purposes
+        self._insert_id = cursor.lastrowid
+        self._inserted = True
 
         return True
 
@@ -176,38 +188,7 @@ class Model:
                   .format(self.table))
 
 
-class ScheduledForecasts(Model):
-    end_date = datetime(2019, 1, 1, 0, 0, 0)
-
-    def __init__(self, start_date, **kwargs):
-        super().__init__(**kwargs)
-
-        # db fields
-        self.date_time = ''
-        self._unique_columns.append('date_time')
-
-        self.start_date = start_date  # should be datetime object
-        if self.start_date and isinstance(start_date, datetime):
-            self.date_time = self.datetime_to_text()
-        else:
-            raise AttributeError("start date must be datetime object.")
-
-    def text_to_datetime(self):
-        """
-        convert text in sqlite3 database to python datetime object
-        :return: datetime object
-        """
-        return datetime.strptime(self.date_time, '%Y-%m-%d %H:%M:%S')
-
-    def datetime_to_text(self):
-        """
-        covert python3 datetime object to text string to store in sqlite3 database
-        :return: string containing datetime in format MM-DD-YYYY HH:MM:SS
-        """
-        return str(self.start_date)
-
-
-class ScheduledEvaluations(Model):
+class Schedules(Model):
     end_date = datetime(2019, 1, 1, 0, 0, 0)
 
     def __init__(self, start_date, **kwargs):
@@ -237,23 +218,7 @@ class ScheduledEvaluations(Model):
         :param datetime_object: python3 datetime object
         :return: string containing datetime in format MM-DD-YYYY HH:MM:SS
         """
-        return str(self.start_date)
-
-
-class Schedule:
-    end_date = datetime(2019, 1, 1, 0, 0, 0)
-
-    def __init__(self, start_date=None):
-        self.start_date = start_date
-
-    def date_range(self, days=1, months=0, years=0):
-        date = self.start_date
-        if date:
-            while date < self.end_date:
-                yield date
-                date += relativedelta(days=days, months=months, years=years)
-        else:
-            return iter([])
+        return self.start_date.strftime('%Y-%m-%d')
 
 
 class Dispatchers(Model):
@@ -330,17 +295,17 @@ class ForecastGroups(Model):
     end_date = Schedule.end_date
 
     def __init__(self, group_path, dispatcher_id=None,
-                 config_filepath=None, group_name=None, group_description=None, **kwargs):
+                 config_filepath='', group_name='', group_description='', **kwargs):
         super().__init__(**kwargs)
         self.entry_date = None
         self.result_dir = None
         self.post_processing = None
-        self.group_path = None
         self.fg = None
         self.group_dir = None
         self.forecast_dir = None
         self.post_processing = None
         self.entry_date = None
+        self.observation_dir = None
         self.models = []
         self.expected_forecasts = []
 
@@ -364,6 +329,7 @@ class ForecastGroups(Model):
             self.group_dir = os.path.basename(self.group_path)
             self.evaluation_tests = self.parse_evaluation_tests()
             self.result_dir = self.parse_result_dir()
+            self.observation_dir = self.parse_observation_dir()
             self.post_processing = self.parse_postprocessing()
             self.entry_date_text = self.parse_entry_date_text()
             if self.entry_date_text:
@@ -376,7 +342,7 @@ class ForecastGroups(Model):
         """
         return self.fg.elementValue('entryDate')
 
-    def schedule(self, schedule_type):
+    def schedule(self):
         """
         generator function to create dates used to expect forecasts and evaluations
         :return:
@@ -387,10 +353,7 @@ class ForecastGroups(Model):
         if self.entry_date:
             s = Schedule(self.entry_date)
             for date in s.date_range():
-                if schedule_type == 'forecast':
-                    schedule = ScheduledForecasts(date, conn=self.conn)
-                elif schedule_type == 'evaluation':
-                    schedule = ScheduledEvaluations(date, conn=self.conn)
+                schedule = Schedules(date, conn=self.conn)
                 yield schedule
         else:
             return iter([])
@@ -400,7 +363,7 @@ class ForecastGroups(Model):
         generator function to return forecasts associated with a particular forecast group
         :return:
         """
-        for schedule in self.schedule('forecast'):
+        for schedule in self.schedule():
             for name in self.expected_forecasts:
                 forecast = Forecasts(schedule, self, name, self.forecast_dir, conn=self.conn)
                 yield forecast
@@ -414,7 +377,7 @@ class ForecastGroups(Model):
         """
         if not self.evaluation_tests:
             return iter([])
-        for schedule in self.schedule('evaluation'):
+        for schedule in self.schedule():
             for test in self.evaluation_tests:
                 for forecast in self.forecasts():
                     evaluation = Evaluations(schedule, forecast, self.result_dir, test, conn=self.conn)
@@ -427,7 +390,7 @@ class ForecastGroups(Model):
         """
         fcdir_path = self.fg.elementValue('forecastDir')
         if not fcdir_path:
-            return None
+            return ''
         if os.path.isabs(fcdir_path):
             return fcdir_path
         return os.path.join(self.group_path, fcdir_path)
@@ -439,10 +402,22 @@ class ForecastGroups(Model):
         """
         resdir_path = self.fg.elementValue('resultDir')
         if not resdir_path:
-            return None
+            return ''
         if os.path.isabs(resdir_path):
             return resdir_path
         return os.path.join(self.group_path, resdir_path)
+
+    def parse_observation_dir(self):
+        """
+        reads locations of results from forecast group init file
+        :return: full path of directory where evaluations are stored
+        """
+        obsdir_path = self.fg.elementValue('catalogDir')
+        if not obsdir_path:
+            return ''
+        if os.path.isabs(obsdir_path):
+            return obsdir_path
+        return os.path.join(self.group_path, obsdir_path)
 
     def parse_postprocessing(self):
         """
@@ -538,30 +513,30 @@ class ForecastGroups(Model):
         return expected_forecasts
 
     def parse_evaluation_tests(self, xml_elem=None):
-            """
-            either parses entire configuration file, or tests from single element.
-            xml_elem would be used to get schedules for different evaluations
-            :param xml_elem: xml_elem obj to parse tests from
-            :return: returns list of xml elements
-            """
-            # parse all tests
-            if not xml_elem:
-                tests = []
-                try:
-                    for elem in self.fg.next('evaluationTests'):
-                        if elem.text:
-                            tests.extend(elem.text.strip().split(' '))
-                except AttributeError:
-                    # print warning that no evaluation tests were found.
-                    print("Warning: No evaluation tests found for ForecastGroup {}."
-                          .format(self.group_path))
-                return tests
-            # only parse for particular element
+        """
+        either parses entire configuration file, or tests from single element.
+        xml_elem would be used to get schedules for different evaluations
+        :param xml_elem: xml_elem obj to parse tests from
+        :return: returns list of xml elements
+        """
+        # parse all tests
+        if not xml_elem:
+            tests = []
+            try:
+                for elem in self.fg.next('evaluationTests'):
+                    if elem.text:
+                        tests.extend(elem.text.strip().split(' '))
+            except AttributeError:
+                # print warning that no evaluation tests were found.
+                print("Warning: No evaluation tests found for ForecastGroup {}."
+                      .format(self.group_path))
+            return tests
+        # only parse for particular element
+        else:
+            if xml_elem.text:
+                return xml_elem.text.strip().split(' ')
             else:
-                if xml_elem.text:
-                    return xml_elem.text.strip().split(' ')
-                else:
-                    return []
+                return []
 
     def parse_schedule(self, xml_tag):
         """
@@ -569,6 +544,7 @@ class ForecastGroups(Model):
         :param xml_tag: string containing the xml tag to parse schedule from; ('models','evaluationTests')
         :return: CSEPSchedule object
         """
+        # FIXME: this should generate a list of schedule objects
         schedule = []
         try:
             for elem in self.fg.next(xml_tag):
@@ -675,11 +651,9 @@ class Forecasts(Model):
         generator function to produce evaluations for a given forecast
         :return: evaluation object or empty iterator if none
         """
-        # use the same schedule for all evaluations
-        schedule = ScheduledEvaluations(self.schedule_id.start_date, conn=self.conn)
         if self.name and self.group_id.result_dir:
             for test in self.group_id.evaluation_tests:
-                evaluation = Evaluations(schedule, self, self.group_id.result_dir, test, conn=self.conn, **kwargs)
+                evaluation = Evaluations(self.schedule_id, self, self.group_id.result_dir, test, conn=self.conn)
                 yield evaluation
         else:
             return iter([])
@@ -687,7 +661,8 @@ class Forecasts(Model):
 
 class Evaluations(Model):
     def __init__(self, schedule_id, forecast_id, archive_dir, evaluation_name, filepath='', status='',
-                 compute_datetime='', full_list_of_files=[], **kwargs):
+                 creation_datetime='', runtime_dir='', full_list_of_files=[],
+                 catalog_result_filepath='', catalog_status='', catalog_creation_datetime='', **kwargs):
         super().__init__(**kwargs)
 
         # database fields
@@ -696,7 +671,11 @@ class Evaluations(Model):
         self.name = evaluation_name
         self.filepath = filepath
         self.status = status
-        self.compute_datetime = compute_datetime
+        self.creation_datetime = creation_datetime
+        self.runtime_dir = runtime_dir
+        self.catalog_result_filepath = catalog_result_filepath
+        self.catalog_status = catalog_status
+        self.catalog_creation_datetime = catalog_creation_datetime
 
         self.daily_archive_dir = ''
         self.meta_filepath = []
@@ -713,8 +692,6 @@ class Evaluations(Model):
             self.filepath = self.determine_full_filepath(self._build_regex(),
                                                          full_list_of_paths=self.full_list_of_files)
 
-            self.meta_filepath = self.determine_meta_filepath(self._build_regex(),
-                                                              full_list_of_paths=self.full_list_of_files)
         # cant build file path without date or result_dir
         elif self.date and self.forecast_group_archive_dir:
             self.daily_archive_dir = os.path.join(
@@ -728,7 +705,16 @@ class Evaluations(Model):
 
             if self.name and self.daily_archive_dir:
                 self.filepath = self.determine_full_filepath(self._build_regex())
-                self.meta_filepath = self.determine_meta_filepath(self._build_regex())
+
+        # even though creation_datetime exists in meta file we can use system cdate as a
+        # fallback
+        if self.filepath:
+            self.meta_filepath = self.determine_meta_filepath()
+            self.creation_datetime = self.parse_creation_datetime()
+
+        # don't try to parse runtime dir if no meta file
+        if self.meta_filepath:
+            self.runtime_dir = self.parse_runtime_dir()
 
         # set status of evaluation
         if self.filepath:
@@ -736,15 +722,52 @@ class Evaluations(Model):
         else:
             self.status = "Missing"
 
+        # get catalog information
+        catalog = self.get_catalog()
+        self.catalog_result_filepath = catalog.result_filepath
+        self.catalog_status = catalog.status
+        self.catalog_creation_datetime = catalog.creation_datetime
+
         # assign forecasts as scheduled if greater than today's date
         # evaluations happen the day after the forecast
-        if forecast_id.waiting_period:
-            waiting_period = forecast_id.waiting_period
+        if self.forecast_id.waiting_period:
+            waiting_period = self.forecast_id.waiting_period
         # FIXME: hard-coded for one-day models, don't ignore
-        evaluation_date = schedule_id.start_date
+        evaluation_date = self.schedule_id.start_date
         current_date = datetime.today() - timedelta(days=int(waiting_period)-1)
         if self.status == 'Missing' and evaluation_date > current_date:
             self.status = 'Scheduled'
+
+    def parse_runtime_dir(self):
+        p = re.compile(r"runtimeDirectory=(\S*)'")
+        try:
+            with open(self.meta_filepath, 'r') as f:
+                lines = f.readlines()
+            para = ''.join(lines).strip()
+            result = p.search(para)
+            if result:
+                return result.group(1)
+            else:
+                return ''
+        except FileNotFoundError:
+            return ''
+
+    def parse_creation_datetime(self):
+        p = re.compile(r"CreationDateTime = (\S*)")
+        try:
+            with open(self.meta_filepath, 'r') as f:
+                lines = f.readlines()
+            para = ''.join(lines).strip()
+            result = p.search(para)
+            if result:
+                datetime_string = result.group(1)
+                dt = datetime.strptime(datetime_string, '%Y-%m-%dT%H:%M:%S')
+                return dt.strftime('%Y-%m-%d')
+        except FileNotFoundError:
+            ctime = os.path.getctime(self.filepath)
+            ctime_human = datetime.fromtimestamp(ctime).strftime('%Y-%m-%d')
+            return ctime_human
+        return ''
 
     def _build_regex(self):
         """
@@ -772,23 +795,21 @@ class Evaluations(Model):
         matches = [path for path in paths if all(f(path) for f in filters)]
         # apply full filename
         full = list(map(lambda x: os.path.join(self.daily_archive_dir, x), matches))
-        return ', '.join(full)
+        full_newest = ''
+        if full:
+            full_newest = max(full, key=os.path.getctime)
+        return full_newest
 
-    def determine_meta_filepath(self, regex, full_list_of_paths=[]):
+    def determine_meta_filepath(self):
         """
         locates evaluation files in the results directory
-        :param regex: regex object
-        :param full_list_of_paths: optional, list of paths to search
         :return: list of found forecast files, empty list if none
         """
-        paths = self._list_of_result_files
-        if full_list_of_paths:
-            paths = full_list_of_paths
-        filters = [regex.match, lambda x: x.endswith('.meta')]
-        matches = [path for path in paths if all(f(path) for f in filters)]
-        # apply full filename
-        full = list(map(lambda x: os.path.join(self.daily_archive_dir, x), matches))
-        return ', '.join(full)
+        meta = self.filepath + '.meta'
+        if os.path.isfile(meta):
+            return meta
+        else:
+            return ''
 
     def insert(self):
         """
@@ -807,13 +828,16 @@ class Evaluations(Model):
         if num == 0 or not fields_values:
             print("Warning: Skipping inserts, no values found.")
             return False
-        try:
-            for field, value in fields_values:
-                self._prepare_insert_values(field, value)
 
-            fields, values = zip(*self._insert_values.items())
-            fields = ', '.join(fields)
-            values = ', '.join(values)
+        for field, value in fields_values:
+            self._prepare_insert_values(field, value)
+
+        fields, values = zip(*self._insert_values.items())
+
+        fields = ', '.join(fields)
+        values = ', '.join(values)
+
+        try:
 
             cursor = self.conn.cursor()
             cursor.execute("INSERT INTO {0} ({1}) VALUES ({2})".format(self.table, fields, values))
@@ -826,19 +850,145 @@ class Evaluations(Model):
         except sqlite3.IntegrityError:
             # get rowid of table where the unique constraint was violated
             cursor = self.conn.cursor()
-            cursor.execute('select rowid, filepath from Evaluations where forecast_id=? and name=?',
+            cursor.execute('select rowid, status from Evaluations where forecast_id=? and name=?',
                            (self.forecast_id.insert_id, str(self.name)))
             result = cursor.fetchone()
-            if result and self.status == "Complete":
-                rowid = int(result[0])
-                db_filepath = str(result[1])
-                updated_filepath = self.filepath + ', ' + db_filepath
-                cursor.execute('update Evaluations set filepath=?, status=? where rowid=?',
-                               (updated_filepath, self.status, rowid))
+            rowid = int(result[0])
+            status_from_db = str(result[1])
+            # FIXME: incorrectly reporting observations with missing forecasts as missing
+            if result:
+                # if new evaluation found, we want to update everything
+                if self.status == "Complete":
+                    cursor.execute('update Evaluations set filepath=?, status=?, runtime_dir=?, creation_datetime=?,' +
+                                   ' catalog_result_filepath=?, catalog_status=?, catalog_creation_datetime=?' +
+                                   ' where rowid=?', (self.filepath, self.status, self.runtime_dir, self.creation_datetime,
+                                                      self.catalog_result_filepath, self.catalog_status,
+                                                      self.catalog_creation_datetime, rowid))
+
+                # if we have found a catalog, but not an evaluation only update the catalog
+                # note: if there is an evaluation in the database, we don't want to overwrite it
+                elif self.catalog_status == "Present" and status_from_db == 'Missing':
+                    print(self.catalog_result_filepath)
+                    cursor.execute('update Evaluations set catalog_result_filepath=?, catalog_status=?, ' +
+                                   'catalog_creation_datetime=? where rowid=?',
+                                   (self.catalog_result_filepath, self.catalog_status, self.catalog_creation_datetime,
+                                    rowid))
+
+                # update insert id for fk purposes
+                self._insert_id = cursor.lastrowid
+                self._inserted = True
 
         return True
 
+    def get_catalog(self):
+        catalog = Catalogs(self.schedule_id, self)
+        return catalog
 
 
+class Catalogs:
+    """
+    associates the catalog used for a particular evaluation, or the catalog that would be used in the
+    case the evaluation does not exist.
+    """
+    def __init__(self, schedule_id, evaluation_id, filepath='', status='',
+                 creation_datetime=''):
 
+        # db fields
+        self.schedule_id = schedule_id
+        self.result_filepath = filepath
+        self.status = status
+        self.creation_datetime = creation_datetime
+
+        # useful members not in db
+        self.evaluation_id = evaluation_id
+        self.fg = self.evaluation_id.forecast_id.group_id
+        self.obs_dir = self.fg.observation_dir
+
+        # observation date directory
+        self.obs_dir_full = os.path.join(self.obs_dir, self.schedule_id.date_time)
+
+        # parse information from catalogs dir
+        self.creation_datetime, self.result_filepath = self.parse_result_filepath_and_creation_date()
+        self.status = self.parse_status()
+
+    def parse_result_filepath_and_creation_date(self):
+        """
+        initially return the catalog based on parsing metadata file
+
+        meta datafile -> verify catalog type -> assign file name
+        :return:
+        """
+        # in observation directory
+        obs_dir = self.obs_dir_full
+        meta_file_map = {}
+        dates = []
+        creation_datetime = ''
+        result_filepath = ''
+
+        meta_files = glob.glob(os.path.join(obs_dir, "*.meta"))
+        if meta_files:
+            for mfile in meta_files:
+                metadata_dict = self.parse_data_from_metafiles(mfile)
+                if metadata_dict['type'] == 'catalog.nodecl.dat':
+                    meta_file_map[metadata_dict['creation_date']] = mfile
+                    dates.append(metadata_dict['creation_date'])
+
+            # eval.creation_date could be '' or some date string
+            # if '' or date string not found in directory we get key error in dict
+            try:
+                meta_file = meta_file_map[self.evaluation_id.creation_datetime]
+                creation_datetime = self.evaluation_id.creation_datetime
+            # if does not exist, choose most recent
+            except KeyError:
+                creation_datetime = sorted(dates)[0]
+                meta_file = meta_file_map[creation_datetime]
+
+            result_filepath = meta_file[:-5]
+
+        return creation_datetime, result_filepath
+
+    def parse_status(self):
+        """
+        :return: (bool)
+        """
+
+        if not os.path.isfile(self.result_filepath):
+            status = 'Missing'
+
+        else:
+            status = "Present"
+
+        waiting_period = self.evaluation_id.forecast_id.waiting_period
+        current_date = datetime.today() - timedelta(days=int(waiting_period)-1)
+        if status == "Missing" and self.schedule_id.start_date > current_date:
+            status = "Scheduled"
+
+        return status
+
+    @staticmethod
+    def parse_data_from_metafiles(fname):
+        """
+        file type is stored as comment # in first line of the file
+        :param fname: filename of file to object
+        :return: dict() keys
+                [type]
+                [creation_date]
+        """
+        metadata = {}
+        with open(fname) as f:
+            lines = f.readlines()
+        # filetype is first line of the file
+        metadata['type'] = lines[0][1:].strip()
+
+        p = re.compile(r"CreationDateTime = (\S*)")
+        para = ''.join(lines).strip()
+        result = p.search(para)
+        if result:
+            datetime_string = result.group(1)
+            dt = datetime.strptime(datetime_string, '%Y-%m-%dT%H:%M:%S')
+            metadata['creation_date'] = dt.strftime('%Y-%m-%d')
+        else:
+            metadata['creation_date'] = ''
+
+        return metadata
 

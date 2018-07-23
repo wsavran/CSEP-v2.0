@@ -1,10 +1,5 @@
-CREATE TABLE IF NOT EXISTS ScheduledForecasts (
-    scheduled_forecast_id INTEGER PRIMARY KEY,
-    date_time TEXT NOT NULL UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS ScheduledEvaluations (
-    scheduled_evaluation_id INTEGER PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS Schedules (
+    schedule_id INTEGER PRIMARY KEY,
     date_time TEXT NOT NULL UNIQUE
 );
 
@@ -30,24 +25,29 @@ CREATE TABLE IF NOT EXISTS Forecasts (
     schedule_id INTEGER NOT NULL,
     group_id INTEGER NOT NULL,
     name TEXT NOT NULL,
-    filepath TEXT UNIQUE,
+    filepath TEXT,
     meta_filepath TEXT,
     waiting_period TEXT,
     logfile TEXT,
     status TEXT,
-    FOREIGN KEY(schedule_id) REFERENCES ScheduledForecasts,
-    FOREIGN KEY(group_id) REFERENCES ForecastGroups
+    FOREIGN KEY(schedule_id) REFERENCES Schedules,
+    FOREIGN KEY(group_id) REFERENCES ForecastGroups,
+    UNIQUE(filepath)
 );
 
 CREATE TABLE IF NOT EXISTS Evaluations (
     evaluation_id INTEGER PRIMARY KEY,
     schedule_id INTEGER NOT NULL,
     forecast_id INTEGER NOT NULL,
-    compute_datetime TEXT,
     filepath TEXT,
     name TEXT,
     status TEXT,
-    FOREIGN KEY(schedule_id) REFERENCES ScheduledEvaluations,
-    FOREIGN KEY(forecast_id) REFERENCES Forecasts,
+    runtime_dir TEXT,
+    creation_datetime TEXT,
+    catalog_result_filepath TEXT,
+    catalog_status TEXT,
+    catalog_creation_datetime TEXT,
+    FOREIGN KEY(schedule_id) REFERENCES Schedules,
+    FOREIGN KEY(forecast_id) REFERENCES Forecasts
     UNIQUE(forecast_id, name)
 );
