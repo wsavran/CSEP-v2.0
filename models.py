@@ -855,7 +855,6 @@ class Evaluations(Model):
             result = cursor.fetchone()
             rowid = int(result[0])
             status_from_db = str(result[1])
-            # FIXME: incorrectly reporting observations with missing forecasts as missing
             if result:
                 # if new evaluation found, we want to update everything
                 if self.status == "Complete":
